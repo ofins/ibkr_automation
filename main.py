@@ -5,10 +5,10 @@ from ib_insync import IB
 
 from my_module.close_all_positions import close_all_positions
 from my_module.connect import connect_ib
+from my_module.data import Data
 from my_module.logger import Logger
 from my_module.price_action_algo import PriceActionAlgo
 from my_module.timer import timer
-from my_module.trades import fetch_all_trades_to_excel
 from my_module.util import export_to_excel, generate_html_table, get_exit_time
 
 logger = Logger.get_logger(__name__)
@@ -58,9 +58,14 @@ async def main():
 
         await other_task
     elif choice == "2":
-        fetch_all_trades_to_excel(ib)
+        # fetch_all_trades_to_excel(ib)
+        data = Data(ib)
+        trades = data.get_session_trades()
+        data.export_to_excel(trades)
+
         logger.info("Fetching ended. Exiting...")
         ib.disconnect()
+
     elif choice == "3":
         trader = PriceActionAlgo(ib)
         symbols = ["AAPL"]
