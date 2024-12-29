@@ -18,17 +18,32 @@ and handling the backtesting of the strategy.
 """
 
 
+async def other_tasks():
+    # Example async tasks function (replace with actual logic)
+    logger.info("Running other tasks...")
+    await asyncio.sleep(5)  # Simulate async task
+    logger.info("Other tasks completed.")
+
+
 async def main():
-    await timer(get_exit_time())
     ib = IB()
 
-    if connect_ib(ib) == 0:
+    if await connect_ib(ib) == 0:
         logger.error("Failed to connect to IBKR. Exiting.")
         return
 
     logger.info("Connected to IBKR. Starting trading actions...")
 
-    await close_all_positions(ib)
+    timer_task = asyncio.create_task(timer(get_exit_time()))
+
+    other_task = asyncio.create_task(other_tasks())
+
+    result = await timer_task
+    if result:
+        logger.info("Timer finished. Proceed to close all positions...")
+        await close_all_positions(ib)
+
+    await other_task
 
 
 if __name__ == "__main__":
