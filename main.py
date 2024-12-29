@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, time, timedelta, timezone
 
 from ib_insync import IB
 
@@ -6,7 +7,8 @@ from my_module.close_all_positions import close_all_positions
 from my_module.connect import connect_ib
 from my_module.logger import Logger
 from my_module.timer import timer
-from my_module.util import get_exit_time
+from my_module.trades import fetch_all_trades_to_excel
+from my_module.util import export_to_excel, generate_html_table, get_exit_time
 
 logger = Logger.get_logger(__name__)
 
@@ -26,6 +28,13 @@ async def other_tasks():
 
 
 async def main():
+    # Ask the user for input
+    print("Choose an option:")
+    print("1. Run close trades timer")
+    print("2. Fetch trades to Excel")
+
+    choice = input("Enter your choice:")
+
     ib = IB()
 
     if await connect_ib(ib) == 0:
@@ -34,16 +43,24 @@ async def main():
 
     logger.info("Connected to IBKR. Starting trading actions...")
 
-    timer_task = asyncio.create_task(timer(get_exit_time()))
+    if choice == "1":
 
-    other_task = asyncio.create_task(other_tasks())
+        timer_task = asyncio.create_task(timer(get_exit_time()))
 
-    result = await timer_task
-    if result:
-        logger.info("Timer finished. Proceed to close all positions...")
-        await close_all_positions(ib)
+        other_task = asyncio.create_task(other_tasks())
 
-    await other_task
+        result = await timer_task
+        if result:
+            logger.info("Timer finished. Proceed to close all positions...")
+            await close_all_positions(ib)
+
+        await other_task
+    elif choice == "2":
+        fetch_all_trades_to_excel(ib)
+    else:
+        logger.error("Invalid choice. Exiting")
+        ib.disconnect()
+        return
 
 
 if __name__ == "__main__":
