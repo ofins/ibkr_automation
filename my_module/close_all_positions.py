@@ -1,12 +1,16 @@
 from ib_insync import MarketOrder
 
+from my_module.logger import Logger
+
+logger = Logger.get_logger(__name__)
+
 
 async def close_all_positions(ib):
     """
     Closes all active positions.
     """
     try:
-        print("Cancelling all oustanding orders...")
+        logger.info("Cancelling all outstanding orders...")
         ib.reqGlobalCancel()
 
         for pos in ib.positions():  # Exit all active trades
@@ -18,8 +22,10 @@ async def close_all_positions(ib):
             trade = ib.placeOrder(contract, order)
             while not trade.isDone():
                 await asyncio.sleep(1)
-            print(
+            logger.info(
                 f"Position for {contract.localSymbol} with {abs(pos.position)} shares closed."
             )
+
+        ib.disconnect()
     except Exception as e:
-        print(f"Error during position closure: {e}")
+        logger.error(f"Error during position closure: {e}")
