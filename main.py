@@ -6,6 +6,7 @@ from ib_insync import IB
 from my_module.close_all_positions import close_all_positions
 from my_module.connect import connect_ib
 from my_module.logger import Logger
+from my_module.price_action_algo import PriceActionAlgo
 from my_module.timer import timer
 from my_module.trades import fetch_all_trades_to_excel
 from my_module.util import export_to_excel, generate_html_table, get_exit_time
@@ -32,6 +33,7 @@ async def main():
     print("Choose an option:")
     print("1. Run close trades timer")
     print("2. Fetch trades to Excel")
+    print("3. Run Price Action Algo")
 
     choice = input("Enter your choice:")
 
@@ -57,6 +59,17 @@ async def main():
         await other_task
     elif choice == "2":
         fetch_all_trades_to_excel(ib)
+        logger.info("Fetching ended. Exiting...")
+        ib.disconnect()
+    elif choice == "3":
+        trader = PriceActionAlgo(ib)
+        symbols = ["AAPL"]
+        trader.run(symbols)
+
+        isEnd = input("End ALGO now? Input 1 to end.")
+        if isEnd == "1":
+            ib.disconnect()
+            return
     else:
         logger.error("Invalid choice. Exiting")
         ib.disconnect()
