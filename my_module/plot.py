@@ -1,260 +1,225 @@
+import os
 from collections import defaultdict
 from datetime import datetime
 
-# Mock trades data
-mock_trades = [
-    {
-        "Symbol": "AAPL",
-        "Action": "BUY",
-        "Quantity": 100,
-        "Price": 150.25,
-        "Time": datetime(2024, 12, 29, 14, 30),
-        "Execution Price": 150.50,
-    },
-    {
-        "Symbol": "GOOG",
-        "Action": "BUY",
-        "Quantity": 50,
-        "Price": 2800.75,
-        "Time": datetime(2024, 12, 29, 15, 0),
-        "Execution Price": 2801.25,
-    },
-    {
-        "Symbol": "AAPL",
-        "Action": "SELL",
-        "Quantity": 100,
-        "Price": 151.25,
-        "Time": datetime(2024, 12, 29, 14, 40),
-        "Execution Price": 150.50,
-    },
-    {
-        "Symbol": "GOOG",
-        "Action": "SELL",
-        "Quantity": 50,
-        "Price": 2810.75,
-        "Time": datetime(2024, 12, 29, 15, 10),
-        "Execution Price": 2801.25,
-    },
-    {
-        "Symbol": "TSLA",
-        "Action": "BUY",
-        "Quantity": 150,
-        "Price": 600.50,
-        "Time": datetime(2024, 12, 29, 10, 15),
-        "Execution Price": 601.00,
-    },
-    {
-        "Symbol": "AMZN",
-        "Action": "SELL",
-        "Quantity": 30,
-        "Price": 3400.25,
-        "Time": datetime(2024, 12, 29, 13, 0),
-        "Execution Price": 3405.50,
-    },
-    {
-        "Symbol": "TSLA",
-        "Action": "SELL",
-        "Quantity": 50,
-        "Price": 602.75,
-        "Time": datetime(2024, 12, 29, 11, 0),
-        "Execution Price": 603.25,
-    },
-    {
-        "Symbol": "AMZN",
-        "Action": "BUY",
-        "Quantity": 20,
-        "Price": 3400.75,
-        "Time": datetime(2024, 12, 29, 13, 30),
-        "Execution Price": 3402.50,
-    },
-    {
-        "Symbol": "AAPL",
-        "Action": "BUY",
-        "Quantity": 200,
-        "Price": 152.50,
-        "Time": datetime(2024, 12, 29, 14, 45),
-        "Execution Price": 153.00,
-    },
-    {
-        "Symbol": "GOOG",
-        "Action": "BUY",
-        "Quantity": 100,
-        "Price": 2825.50,
-        "Time": datetime(2024, 12, 29, 15, 20),
-        "Execution Price": 2828.00,
-    },
-    {
-        "Symbol": "GOOG",
-        "Action": "SELL",
-        "Quantity": 100,
-        "Price": 2835.00,
-        "Time": datetime(2024, 12, 29, 15, 40),
-        "Execution Price": 2830.50,
-    },
-    {
-        "Symbol": "TSLA",
-        "Action": "BUY",
-        "Quantity": 50,
-        "Price": 603.00,
-        "Time": datetime(2024, 12, 29, 10, 30),
-        "Execution Price": 603.75,
-    },
-    {
-        "Symbol": "AMZN",
-        "Action": "SELL",
-        "Quantity": 50,
-        "Price": 3405.00,
-        "Time": datetime(2024, 12, 29, 14, 0),
-        "Execution Price": 3410.00,
-    },
-    {
-        "Symbol": "AAPL",
-        "Action": "SELL",
-        "Quantity": 200,
-        "Price": 153.75,
-        "Time": datetime(2024, 12, 29, 14, 50),
-        "Execution Price": 154.00,
-    },
-    {
-        "Symbol": "GOOG",
-        "Action": "BUY",
-        "Quantity": 150,
-        "Price": 2840.00,
-        "Time": datetime(2024, 12, 29, 15, 30),
-        "Execution Price": 2845.25,
-    },
-    {
-        "Symbol": "AAPL",
-        "Action": "BUY",
-        "Quantity": 100,
-        "Price": 155.25,
-        "Time": datetime(2024, 12, 29, 15, 50),
-        "Execution Price": 156.00,
-    },
-    {
-        "Symbol": "AMZN",
-        "Action": "BUY",
-        "Quantity": 50,
-        "Price": 3420.00,
-        "Time": datetime(2024, 12, 29, 16, 0),
-        "Execution Price": 3422.50,
-    },
-    {
-        "Symbol": "GOOG",
-        "Action": "SELL",
-        "Quantity": 150,
-        "Price": 2850.25,
-        "Time": datetime(2024, 12, 29, 16, 10),
-        "Execution Price": 2852.00,
-    },
-    {
-        "Symbol": "TSLA",
-        "Action": "SELL",
-        "Quantity": 100,
-        "Price": 606.25,
-        "Time": datetime(2024, 12, 29, 16, 30),
-        "Execution Price": 607.00,
-    },
-    {
-        "Symbol": "AAPL",
-        "Action": "SELL",
-        "Quantity": 100,
-        "Price": 157.00,
-        "Time": datetime(2024, 12, 29, 17, 0),
-        "Execution Price": 157.50,
-    },
-]
+import plotly.graph_objects as go
+from jinja2 import Template
 
-# Aggregate trades and calculate total gains/losses for each symbol
-symbol_data = defaultdict(
-    lambda: {"buy_qty": 0, "buy_price": 0, "sell_qty": 0, "sell_price": 0}
-)
 
-for trade in mock_trades:
-    symbol = trade["Symbol"]
-    if trade["Action"] == "BUY":
-        symbol_data[symbol]["buy_qty"] += trade["Quantity"]
-        symbol_data[symbol]["buy_price"] += trade["Execution Price"] * trade["Quantity"]
-    elif trade["Action"] == "SELL":
-        symbol_data[symbol]["sell_qty"] += trade["Quantity"]
-        symbol_data[symbol]["sell_price"] += (
-            trade["Execution Price"] * trade["Quantity"]
+def create_waterfall_chart(symbol_data):
+    """Create a waterfall chart for a single symbol's trades"""
+    active_trades = sorted(symbol_data, key=lambda x: x["Time"])
+
+    times = []
+    measures = []
+    values = []
+    running_total = 0
+
+    times.append(active_trades[0]["Time"])
+    measures.append("relative")
+    values.append(0)
+
+    for trade in active_trades:
+        if trade["Realized PNL"] != 0:
+            times.append(trade["Time"])
+            measures.append("relative")
+            values.append(trade["Realized PNL"])
+            running_total += trade["Realized PNL"]
+
+    if values:
+        times.append("Total")
+        measures.append("total")
+        values.append(running_total)
+
+    fig = go.Figure(
+        go.Waterfall(
+            x=times,
+            measure=measures,
+            y=values,
+            decreasing={"marker": {"color": "red"}},
+            increasing={"marker": {"color": "blue"}},
+            totals={"marker": {"color": "purple"}},
+            connector={"line": {"color": "black", "width": 1}},
         )
+    )
 
-# Calculate average buy price and sell price, and profit/loss for each symbol
-result = []
-for symbol, data in symbol_data.items():
-    if data["buy_qty"] > 0 and data["sell_qty"] > 0:
-        avg_buy_price = data["buy_price"] / data["buy_qty"]
-        avg_sell_price = data["sell_price"] / data["sell_qty"]
-        total_profit_loss = (avg_sell_price - avg_buy_price) * min(
-            data["buy_qty"], data["sell_qty"]
-        )
-        result.append(
-            {
-                "Symbol": symbol,
-                "Total Quantity": min(data["buy_qty"], data["sell_qty"]),
-                "Average Buy Price": avg_buy_price,
-                "Average Sell Price": avg_sell_price,
-                "Profit/Loss": total_profit_loss,
+    fig.update_layout(
+        title=f"Realized PNL Over Time for {symbol_data[0]['Symbol']}",
+        xaxis_title="Time",
+        yaxis_title="PNL Amount",
+        showlegend=False,
+        xaxis={"tickangle": 45, "tickformat": "%Y-%m-%d %H:%M"},
+    )
+
+    return fig.to_json()
+
+
+def generate_html(data):
+    today_date = datetime.now().strftime("%Y-%m-%d")
+
+    # Group trades by symbol
+    symbol_trades = defaultdict(list)
+    total_pnl = 0
+
+    for trade in data:
+        symbol_trades[trade["Symbol"]].append(trade)
+        total_pnl += trade["Realized PNL"]
+
+    # Calculate total PNL for each symbol
+    symbol_totals = {
+        symbol: sum(trade["Realized PNL"] for trade in trades)
+        for symbol, trades in symbol_trades.items()
+    }
+
+    # Create waterfall charts
+    charts_json = {
+        symbol: create_waterfall_chart(trades)
+        for symbol, trades in symbol_trades.items()
+        if any(trade["Realized PNL"] != 0 for trade in trades)
+    }
+
+    html_template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Trade Data Report - {{ today_date }}</title>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            body {
+                padding: 20px;
+                font-family: Arial, sans-serif;
             }
-        )
-
-# Generate HTML table
-html_content = """
-<html>
-<head>
-    <title>Total Gains/Losses by Symbol</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-    </style>
-</head>
-<body>
-    <h2>Total Gains/Losses by Symbol</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Symbol</th>
-                <th>Total Quantity</th>
-                <th>Average Buy Price</th>
-                <th>Average Sell Price</th>
-                <th>Profit/Loss</th>
-            </tr>
-        </thead>
-        <tbody>
-"""
-
-for entry in result:
-    html_content += f"""
-            <tr>
-                <td>{entry['Symbol']}</td>
-                <td>{entry['Total Quantity']}</td>
-                <td>{entry['Average Buy Price']:.2f}</td>
-                <td>{entry['Average Sell Price']:.2f}</td>
-                <td>{entry['Profit/Loss']:.2f}</td>
-            </tr>
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+                font-size: 16px;
+                text-align: left;
+            }
+            table th, table td {
+                border: 1px solid #ddd;
+                padding: 12px 8px;
+            }
+            table th {
+                background-color: #f2f2f2;
+            }
+            .chart-container {
+                width: 100%;
+                max-width: 1000px;
+                height: 500px;
+                margin: 20px 0;
+            }
+            .negative-pnl {
+                background-color: #ffeded;
+                color: #d32f2f;
+            }
+            .symbol-section {
+                margin-bottom: 40px;
+                padding: 20px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+            }
+            .symbol-header {
+                background-color: #f8f9fa;
+                padding: 10px;
+                margin: -20px -20px 20px -20px;
+                border-radius: 8px 8px 0 0;
+                border-bottom: 1px solid #ddd;
+            }
+            .total-row {
+                font-weight: bold;
+                background-color: #f8f9fa;
+            }
+            .grand-total {
+                margin-top: 30px;
+                font-size: 1.2em;
+                padding: 15px;
+                background-color: #f8f9fa;
+                border-radius: 4px;
+                text-align: right;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Trade Data Report - {{ today_date }}</h1>
+        
+        {% for symbol, trades in symbol_trades.items() %}
+        <div class="symbol-section">
+            <div class="symbol-header">
+                <h2>{{ symbol }} Trades</h2>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Time</th>
+                        <th>Execution Price</th>
+                        <th>Realized PNL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trade in trades %}
+                    <tr>
+                        <td>{{ trade['Action'] }}</td>
+                        <td>{{ trade['Quantity'] }}</td>
+                        <td>{{ "%.2f"|format(trade['Price']) }}</td>
+                        <td>{{ trade['Time'] }}</td>
+                        <td>{{ "%.2f"|format(trade['Execution Price']) }}</td>
+                        <td class="{{ 'negative-pnl' if trade['Realized PNL'] < 0 }}">
+                            {{ "%.2f"|format(trade['Realized PNL']) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="total-row">
+                        <td colspan="5">Total {{ symbol }}</td>
+                        <td class="{{ 'negative-pnl' if symbol_totals[symbol] < 0 }}">
+                            {{ "%.2f"|format(symbol_totals[symbol]) }}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            {% if symbol in charts %}
+            <div id="chart_{{ symbol }}" class="chart-container"></div>
+            <script>
+                const chartData_{{ symbol }} = {{ charts[symbol] | safe }};
+                Plotly.newPlot('chart_{{ symbol }}', chartData_{{ symbol }}.data, chartData_{{ symbol }}.layout);
+            </script>
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="grand-total">
+            <strong>Total Combined Realized PNL: 
+                <span class="{{ 'negative-pnl' if total_pnl < 0 }}">
+                    {{ "%.2f"|format(total_pnl) }}
+                </span>
+            </strong>
+        </div>
+    </body>
+    </html>
     """
 
-html_content += """
-        </tbody>
-    </table>
-</body>
-</html>
-"""
+    # Render HTML
+    template = Template(html_template)
+    rendered_html = template.render(
+        symbol_trades=symbol_trades,
+        charts=charts_json,
+        today_date=today_date,
+        symbol_totals=symbol_totals,
+        total_pnl=total_pnl,
+    )
 
-# Save the HTML content to a file
-with open("trading_report.html", "w") as file:
-    file.write(html_content)
+    # Ensure the 'dist' folder exists
+    os.makedirs("dist", exist_ok=True)
 
-print("HTML report saved as 'trading_report.html'")
+    # Define the output file path
+    output_file = os.path.join("dist", "trade_report.html")
+
+    # Write the HTML content to the file
+    with open(output_file, "w") as file:
+        file.write(rendered_html)
+
+    print(f"HTML report generated: {output_file}")

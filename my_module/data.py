@@ -1,10 +1,9 @@
 from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from my_module.logger import Logger
-from my_module.plot import mock_trades
-from my_module.util import export_to_excel
 
 logger = Logger.get_logger(__name__)
 
@@ -15,20 +14,33 @@ class Data:
 
     def get_session_trades(self):
         trades = self.ib.trades()
-        today_date = datetime.now().date()
+        today_date = (
+            datetime.now(timezone.utc).astimezone().date()
+        )  # Ensure timezone-awareness
 
-        today_trades = [
-            {
-                "Symbol": trade.contract.symbol,
-                "Action": trade.order.action,
-                "Quantity": trade.order.totalQuantity,
-                "Price": trade.order.lmtPrice,
-                "Time": trade.filledTime,
-                "Execution Price": trade.execution.avgPrice,
-            }
-            for trade in trades
-            if trade.filledTime and trade.filledTime.date() == today_date
-        ]
+        today_trades = []
+        for trade in trades:
+            # Check if there are fills and extract the filled time
+            if trade.fills:
+                filled_time = trade.fills[
+                    0
+                ].execution.time  # Assuming the first fill represents the trade's filled time
+
+                if filled_time.date() == today_date:
+                    logger.info(trade.fills[0].execution)
+                    today_trades.append(
+                        {
+                            "Symbol": trade.contract.symbol,
+                            "Action": trade.order.action,
+                            "Quantity": trade.fills[0].execution.shares,
+                            "Price": trade.order.lmtPrice,
+                            "Time": trade.fills[0]
+                            .execution.time.astimezone(ZoneInfo("America/New_York"))
+                            .strftime("%Y-%m-%d %H:%M:%S"),
+                            "Execution Price": trade.fills[0].execution.avgPrice,
+                            "Realized PNL": trade.fills[0].commissionReport.realizedPNL,
+                        }
+                    )
 
         if not today_trades:
             logger.info("No trades found for this session")
