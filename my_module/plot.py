@@ -1,9 +1,14 @@
 import os
 from collections import defaultdict
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import plotly.graph_objects as go
 from jinja2 import Template
+
+from my_module.logger import Logger
+
+logger = Logger.get_logger(__name__)
 
 
 def create_waterfall_chart(symbol_data):
@@ -37,8 +42,8 @@ def create_waterfall_chart(symbol_data):
             measure=measures,
             y=values,
             decreasing={"marker": {"color": "red"}},
-            increasing={"marker": {"color": "blue"}},
-            totals={"marker": {"color": "purple"}},
+            increasing={"marker": {"color": "green"}},
+            totals={"marker": {"color": "gray"}},
             connector={"line": {"color": "black", "width": 1}},
         )
     )
@@ -55,7 +60,7 @@ def create_waterfall_chart(symbol_data):
 
 
 def generate_html(data):
-    today_date = datetime.now().strftime("%Y-%m-%d")
+    today_date = datetime.now().astimezone(ZoneInfo("America/New_York")).date()
 
     # Group trades by symbol
     symbol_trades = defaultdict(list)
@@ -160,7 +165,7 @@ def generate_html(data):
                     </tr>
                 </thead>
                 <tbody>
-                    {% for trade in trades %}
+                    {% for trade in trades | sort(attribute='Time') %}
                     <tr>
                         <td>{{ trade['Action'] }}</td>
                         <td>{{ trade['Quantity'] }}</td>
@@ -216,10 +221,10 @@ def generate_html(data):
     os.makedirs("dist", exist_ok=True)
 
     # Define the output file path
-    output_file = os.path.join("dist", "trade_report.html")
+    output_file = os.path.join("dist", f"{today_date}.html")
 
     # Write the HTML content to the file
     with open(output_file, "w") as file:
         file.write(rendered_html)
 
-    print(f"HTML report generated: {output_file}")
+    logger.info(f"HTML report generated: {output_file}")

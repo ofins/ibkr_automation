@@ -44,8 +44,6 @@ async def main():
         logger.error("Failed to connect to IBKR. Exiting.")
         return
 
-    logger.info("Connected to IBKR. Starting trading actions...")
-
     if choice == "1":
 
         timer_task = asyncio.create_task(timer(get_exit_time()))
@@ -62,8 +60,9 @@ async def main():
         # fetch_all_trades_to_excel(ib)
         data = Data(ib)
         trades = data.get_session_trades()
-        data.export_to_excel(trades, "Today.xlsx")
+        # data.export_to_excel(trades, "Today.xlsx")
         generate_html(trades)
+        # TODO: also save a json file for data storage
 
         logger.info("Fetching ended. Exiting...")
         ib.disconnect()
@@ -73,10 +72,10 @@ async def main():
         symbols = ["AAPL"]
         trader.run(symbols)
 
-        isEnd = input("End ALGO now? Input 1 to end.")
-        if isEnd == "1":
-            ib.disconnect()
-            return
+        # isEnd = input("End ALGO now? Input 1 to end.")
+        # if isEnd == "1":
+        #     ib.disconnect()
+        #     return
     else:
         logger.error("Invalid choice. Exiting")
         ib.disconnect()

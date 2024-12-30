@@ -3,7 +3,11 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import pytz
-from ib_insync import Stock
+from ib_insync import Stock, util
+
+from my_module.logger import Logger
+
+logger = Logger.get_logger(__name__)
 
 
 class PriceActionAlgo:
@@ -17,20 +21,28 @@ class PriceActionAlgo:
     def get_contract(self, symbol):
         """Create stock contract"""
         contract = Stock(symbol, "SMART", "USD")
+        # print(self.ib.qualifyContracts(contract))
         self.ib.qualifyContracts(contract)
+
         return contract
 
     def get_historical_data(self, contract, duration="2 D"):
         """Get historical data for initial analysis"""
-        bars = self.ib.reqHistoricalData(
-            contract,
-            endDateTime="",
-            durationStr=duration,
-            barSizeSetting="1 min",
-            whatToShow="TRADES",
-            useRTH=True,
-            formatDate=1,
-        )
+        logger.info(contract)
+        bars = []
+        try:
+            bars = self.ib.reqHistoricalData(
+                contract,
+                endDateTime="",
+                durationStr=duration,
+                barSizeSetting="1 min",
+                whatToShow="TRADES",
+                useRTH=True,
+                formatDate=1,
+            )
+        except Exception as e:
+            logger.error(f"error:{e}")
+        logger.info(bars)
         return util.df(bars)
 
     def identify_strong_candles(self, df):
@@ -92,18 +104,19 @@ class PriceActionAlgo:
     def start_streaming(self, symbol):
         """Start streaming real-time data"""
         contract = self.get_contract(symbol)
+        logger.info(contract)
 
         # Get initial historical data
         df = self.get_historical_data(contract)
+        logger.info(df)
         self.bars_data[symbol] = df
-
         # Subscribe to real-time bars
         self.ib.reqRealTimeBars(contract, 5, "TRADES", False)
 
         # Set callback for bar updates
         self.ib.barUpdateEvent += self.on_bar_update
 
-        print(f"Started streaming for {symbol}")
+        logger.info(f"Started streaming for {symbol}")
 
     def run(self, symbols):
         """Main method to run the trading algo"""
@@ -115,4 +128,4 @@ class PriceActionAlgo:
             self.ib.run()
 
         except Exception as e:
-            print(f"Error: {str(e)}")
+            logger.error(f"Error: {str(e)}")
