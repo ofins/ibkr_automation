@@ -22,3 +22,8 @@ async def connect_ib(ib):
     except Exception as e:
         logger.error(f"Connection error: {e}")
         return 0
+
+
+def disconnect_ib(ib: IB):
+    ib.disconnect()
+    logger.info("Disconnected.")

@@ -4,11 +4,12 @@ from datetime import datetime, time, timedelta, timezone
 from ib_insync import IB
 
 from my_module.close_all_positions import close_all_positions
-from my_module.connect import connect_ib
+from my_module.connect import connect_ib, disconnect_ib
 from my_module.data import Data
 from my_module.logger import Logger
 from my_module.plot import generate_html
 from my_module.price_action_algo import PriceActionAlgo
+from my_module.TestAlgo import TestAlgo
 from my_module.timer import timer
 from my_module.util import get_exit_time
 
@@ -62,23 +63,28 @@ async def main():
         trades = data.get_session_trades()
         # data.export_to_excel(trades, "Today.xlsx")
         generate_html(trades)
-        # TODO: also save a json file for data storage
+        # TODO: save data in postgres SQL
 
         logger.info("Fetching ended. Exiting...")
-        ib.disconnect()
+        disconnect_ib(ib)
 
     elif choice == "3":
-        trader = PriceActionAlgo(ib)
-        symbols = ["AAPL"]
-        trader.run(symbols)
+        # trader = PriceActionAlgo(ib)
+        # symbols = ["AAPL"]
+        # trader.run(symbols)
+
+        trader = TestAlgo(ib)
+        trader.run()
+
+        disconnect_ib(ib)
 
         # isEnd = input("End ALGO now? Input 1 to end.")
         # if isEnd == "1":
-        #     ib.disconnect()
+        #     disconnect_ib(ib)
         #     return
     else:
         logger.error("Invalid choice. Exiting")
-        ib.disconnect()
+        disconnect_ib(ib)
         return
 
 

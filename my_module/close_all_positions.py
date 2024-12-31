@@ -2,6 +2,7 @@ import asyncio
 
 from ib_insync import MarketOrder
 
+from my_module.connect import disconnect_ib
 from my_module.logger import Logger
 from my_module.order import place_order
 
@@ -18,8 +19,10 @@ async def close_all_positions(ib):
         for pos in ib.positions():  # Exit all active trades
             contract = pos.contract
             contract.exchange = "SMART"
-            action = "SELL" if pos.position > 0 else "BUY"
-            trade = place_order(ib, contract, action, abs(pos.position), "MARKET")
+            order = MarketOrder(
+                "SELL" if pos.position > 0 else "BUY", abs(pos.position)
+            )
+            trade = ib.placeOrder(contract, order)
 
             while not trade.isDone():
                 await asyncio.sleep(1)
@@ -27,6 +30,6 @@ async def close_all_positions(ib):
                 f"Position for {contract.localSymbol} with {abs(pos.position)} shares closed."
             )
 
-        ib.disconnect()
+        disconnect_ib(ib)
     except Exception as e:
         logger.error(f"Error during position closure: {e}")
