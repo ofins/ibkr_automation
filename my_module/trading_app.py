@@ -1,0 +1,142 @@
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime, time, timedelta, timezone
+from enum import Enum, auto
+from typing import Any, Callable, Coroutine, Dict, Optional, Union
+
+from ib_insync import IB
+
+from my_module.close_all_positions import close_all_positions
+from my_module.connect import connect_ib, disconnect_ib
+from my_module.data import Data
+from my_module.logger import Logger
+from my_module.plot import generate_html
+from my_module.price_action_algo import PriceActionAlgo
+from my_module.TestAlgo import TestAlgo
+from my_module.timer import timer
+from my_module.util import get_exit_time
+
+logger = Logger.get_logger(__name__)
+
+
+class MenuOption(Enum):
+    CLOSE_TRADES = auto()
+    FETCH_TRADES = auto()
+    TEST_ALGO = auto()
+    EXIT = auto()
+
+
+@dataclass
+class MenuChoice:
+    option: MenuOption
+    description: str
+
+
+class TradingApp:
+    """Main trading application that handles IBKR connectivity and trading operations."""
+
+    MENU_CHOICES = {
+        "1": MenuChoice(MenuOption.CLOSE_TRADES, "Run close trades timer"),
+        "2": MenuChoice(MenuOption.FETCH_TRADES, "Generate trade report"),
+        "3": MenuChoice(MenuOption.TEST_ALGO, "Run TestAlgo"),
+        "4": MenuChoice(MenuOption.EXIT, "Exit"),
+    }
+
+    def __init__(self):
+        self.ib = IB()
+        self.data: Data | None = None
+
+    async def display_menu(self) -> MenuOption | None:
+        print("\nTrading Application Menu:")
+        for key, choice in self.MENU_CHOICES.items():
+            print(f"{key}. {choice.description}")
+
+        try:
+            user_input = input("\nEnter your choice: ").strip()
+            return self.MENU_CHOICES[user_input].option
+        except KeyError:
+            if user_input:
+                logger.error("Invalid menu choice.")
+            return None
+
+    async def close_trades(self) -> None:
+        try:
+            exit_time = get_exit_time()
+            timer_task = asyncio.create_task(timer(exit_time))
+
+            result = await timer_task
+            if result:
+                logger.info("Timer finished. Proceed to close all positions...")
+                await close_all_positions(self.ib)
+        except Exception as e:
+            logger.error(f"Error in close trades operation: {str(e)}")
+
+    async def fetch_trades(self) -> None:
+        try:
+            if not self.data:
+                self.data = Data(self.ib)
+
+            trades = self.data.get_session_trades()
+            generate_html(trades)
+            # TODO: save data in postgres SQL
+            logger.info("Successfully generated report.")
+        except Exception as e:
+            logger.error(f"Error in generating report: {str(e)}")
+
+    async def run_test_algo(self) -> None:
+        try:
+            trader = TestAlgo(self.ib)
+            trader.run()
+        except Exception as e:
+            logger.error(f"Error in running test algo: {str(e)}")
+
+    async def handle_menu_choice(self, choice: MenuOption) -> bool:
+        handlers: Dict[MenuOption, Callable[[], Coroutine[Any, Any, Any] | bool]] = {
+            MenuOption.CLOSE_TRADES: self.close_trades,
+            MenuOption.FETCH_TRADES: self.fetch_trades,
+            MenuOption.TEST_ALGO: self.run_test_algo,
+            MenuOption.EXIT: lambda: False,
+        }
+
+        handler = handlers.get(choice)
+        if handler:
+            if asyncio.iscoroutinefunction(handler):
+                await handler()
+                return True
+            return await handler()
+        return True
+
+    async def startup(self) -> bool:
+        try:
+            if not await connect_ib(self.ib):
+                logger.error("Failed to connect to IBKR.")
+                return False
+            logger.info("Success. Connected to IBKR.")
+            return True
+        except Exception as e:
+            logger.error(f"Error in startup: {str(e)}")
+
+    async def shutdown(self) -> bool:
+        try:
+            disconnect_ib(self.ib)
+            logger.info("Disconnected from IBKR.")
+        except Exception as e:
+            logger.error("Shutdown error: {str(e)}")
+
+    async def run(self):
+        try:
+            if not await self.startup():
+                return
+
+            while True:
+                choice = await self.display_menu()
+                if not choice:
+                    continue
+
+                should_continue = await self.handle_menu_choice(choice)
+                if not should_continue:
+                    break
+        except Exception as e:
+            logger.error(f"Unexpected error in main loop: {str(e)}")
+        finally:
+            await self.shutdown()

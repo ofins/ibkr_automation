@@ -15,5 +15,8 @@ class TestAlgo:
             order = MarketOrder("BUY", 25)
 
             self.ib.placeOrder(contract, order)
+            logger.info(
+                f"Place Order: {order.action} {order.totalQuantity} shares of {contract.symbol}"
+            )
         except Exception as e:
             logger.error(f"Error during order placement: {e}")

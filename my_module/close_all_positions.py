@@ -4,7 +4,6 @@ from ib_insync import MarketOrder
 
 from my_module.connect import disconnect_ib
 from my_module.logger import Logger
-from my_module.order import place_order
 
 logger = Logger.get_logger(__name__)
 
