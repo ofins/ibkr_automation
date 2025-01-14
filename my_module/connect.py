@@ -16,7 +16,7 @@ async def connect_ib(ib):
         int: 1 if connection is successful, 0 if there is an error.
     """
     try:
-        await ib.connectAsync("127.0.0.1", 7497, clientId=1)
+        await ib.connectAsync("127.0.0.1", 7497, clientId=2)
         logger.info(f"Connected to IBKR tws API")
         return 1
     except Exception as e:

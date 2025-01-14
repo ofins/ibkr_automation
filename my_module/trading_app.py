@@ -86,7 +86,7 @@ class TradingApp:
     async def run_test_algo(self) -> None:
         try:
             trader = TestAlgo(self.ib)
-            trader.run()
+            await trader.run("AAPL", "LONG", 235.70, 100, 0.1, 0.1, 3)
         except Exception as e:
             logger.error(f"Error in running test algo: {str(e)}")
 
