@@ -12,7 +12,9 @@ logger = Logger.get_logger(__name__)
 class TestAlgo:
     def __init__(self, ib):
         self.ib = ib
+        self.active_orders = []
         self.stop_order = None
+        self.is_running = False
 
     async def run(
         self,
@@ -26,67 +28,168 @@ class TestAlgo:
     ):
         """
         Execute a scaling strategy with stops.
+
+        Args:
+            symbol: Trading symbol
+            direction: Trade direction ("LONG" or "SHORT")
+            initial_price: Starting price level
+            position_size: Size of each position increment
+            increment_range: Price difference between levels
+            stop_range: Distance from entry to stop loss
+            num_increments: Number of scaling levels
         """
         try:
+            self.is_running = True
             contract = Stock(symbol, "SMART", "USD")
 
             # Determine order actions based on direction
             entry_action = "BUY" if direction == "LONG" else "SELL"
             exit_action = "SELL" if direction == "LONG" else "BUY"
 
-            # Calculate all price levels first
-            price_levels = []
-            for i in range(num_increments):
-                if direction == "LONG":
-                    price = initial_price + (i * increment_range)
-                else:
-                    price = initial_price - (i * increment_range)
-                price_levels.append(round(Decimal(str(price)), 2))
-
+            # Calculate price levels
+            price_levels = self._calculate_price_levels(
+                direction, initial_price, increment_range, num_increments
+            )
             logger.info(f"Calculated price levels: {price_levels}")
 
-            stop_price = (
-                float(price_levels[0]) - stop_range
-                if direction == "LONG"
-                else float(price_levels[0]) + stop_range
+            # Place entry orders
+            await self._place_entry_orders(
+                contract, entry_action, position_size, price_levels
             )
 
-            for price in price_levels:
-                order = StopOrder(entry_action, position_size, price)
-                self.ib.placeOrder(contract, order)
-
-            while True:
-                positions = self.ib.positions()
-                for pos in positions:
-                    logger.info(
-                        f"Symbol: {pos.contract.symbol}, Size: {pos.position}, Avg Cost: {pos.avgCost}"
-                    )
-
-                    if float(pos.position) != 0:
-                        if self.stop_order == None:
-                            a = float(price_levels[0]) - increment_range
-                            logger.info(a)
-
-                            order = StopOrder(
-                                exit_action,
-                                pos.position,
-                                a,
-                            )
-
-                            self.stop_order = self.ib.placeOrder(contract, order)
-                            logger.info("2")
-
-                        if float(self.stop_order.order.totalQuantity) == float(
-                            pos.position
-                        ):
-                            return
-
-                        self.ib.cancelOrder(self.stop_order.order)
-
-                        await asyncio.sleep(3)
-
-            # when price stop orders are filled, i want to put a stop loss of order with position equal to the total position size of this stock at the moment. It should update upon each stop order that is
+            # Monitor positions and manage stops
+            await self._monitor_positions(
+                contract, exit_action, price_levels, increment_range, direction
+            )
 
         except Exception as e:
-            logger.error(f"Error initializing scaling strategy: {e}")
+            logger.error(f"Error in trading strategy: {e}")
+            await self.cleanup()
             raise
+        finally:
+            self.is_running = False
+
+    def _calculate_price_levels(
+        self,
+        direction: str,
+        initial_price: float,
+        increment_range: float,
+        num_increments: int,
+    ) -> list[Decimal]:
+        """Calculate all price levels for scaling in."""
+        price_levels = []
+        for i in range(num_increments):
+            if direction == "LONG":
+                price = initial_price + (i * increment_range)
+            else:
+                price = initial_price - (i * increment_range)
+            price_levels.append(round(Decimal(str(price)), 2))
+        return price_levels
+
+    async def _place_entry_orders(
+        self,
+        contract,
+        entry_action: str,
+        position_size: int,
+        price_levels: list[Decimal],
+    ):
+        """Place all entry orders at calculated price levels."""
+        for price in price_levels:
+            order = StopOrder(entry_action, position_size, price)
+            placed_order = self.ib.placeOrder(contract, order)
+            self.active_orders.append(placed_order)
+
+    async def _monitor_positions(
+        self,
+        contract,
+        exit_action: str,
+        price_levels: list[Decimal],
+        increment_range: float,
+        direction: str,
+    ):
+        """Monitor positions and manage stop orders."""
+        while self.is_running:
+            try:
+                current_position = self._get_current_position(contract)
+
+                if current_position != 0:
+                    await self._manage_stop_order(
+                        contract,
+                        exit_action,
+                        current_position,
+                        price_levels,
+                        increment_range,
+                        direction,
+                    )
+
+                await asyncio.sleep(1)  # Reduce polling frequency
+
+            except Exception as e:
+                logger.error(f"Error in position monitoring: {e}")
+                await self.cleanup()
+                break
+
+    def _get_current_position(self, contract) -> float:
+        """Get current position size for the contract."""
+        positions = self.ib.positions()
+        for pos in positions:
+            if pos.contract.symbol == contract.symbol:
+                return float(pos.position)
+        return 0
+
+    async def _manage_stop_order(
+        self,
+        contract,
+        exit_action: str,
+        current_position: float,
+        price_levels: list[Decimal],
+        increment_range: float,
+        direction: str,
+    ):
+        """Manage the stop order based on current position."""
+        stop_price = self._calculate_stop_price(
+            price_levels[0], increment_range, direction
+        )
+
+        if self.stop_order is None:
+            self.stop_order = self.ib.placeOrder(
+                contract, StopOrder(exit_action, abs(current_position), stop_price)
+            )
+            logger.info(f"Placed new stop order at {stop_price}")
+
+        elif abs(float(self.stop_order.order.totalQuantity)) != abs(current_position):
+            # Update stop order if position size has changed
+            self.ib.cancelOrder(self.stop_order.order)
+            await asyncio.sleep(1)  # Wait for cancellation to process
+
+            self.stop_order = self.ib.placeOrder(
+                contract, StopOrder(exit_action, abs(current_position), stop_price)
+            )
+            logger.info(
+                f"Updated stop order to match position size: {current_position}"
+            )
+
+    def _calculate_stop_price(
+        self, base_price: Decimal, increment_range: float, direction: str
+    ) -> float:
+        """Calculate stop price based on direction and base price."""
+        if direction == "LONG":
+            return float(base_price) - increment_range
+        return float(base_price) + increment_range
+
+    async def cleanup(self):
+        """Cancel all active orders."""
+        for order in self.active_orders:
+            try:
+                self.ib.cancelOrder(order.order)
+            except Exception as e:
+                logger.error(f"Error cancelling order: {e}")
+
+        if self.stop_order:
+            try:
+                self.ib.cancelOrder(self.stop_order.order)
+            except Exception as e:
+                logger.error(f"Error cancelling stop order: {e}")
+
+        self.active_orders = []
+        self.stop_order = None
