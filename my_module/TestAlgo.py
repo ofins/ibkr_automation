@@ -2,8 +2,9 @@ import asyncio
 from decimal import Decimal
 from typing import Literal
 
-from ib_insync import MarketOrder, Stock, StopOrder
+from ib_insync import LimitOrder, MarketOrder, Stock, StopOrder
 
+from my_module.close_all_positions import close_all_positions
 from my_module.logger import Logger
 
 logger = Logger.get_logger(__name__)
@@ -15,6 +16,9 @@ class TestAlgo:
         self.active_orders = []
         self.stop_order = None
         self.is_running = False
+        self.exit_action = None
+        self.entry_action = None
+        self.is_active_trading = False
 
     async def run(
         self,
@@ -23,7 +27,6 @@ class TestAlgo:
         initial_price: float,
         position_size: int,
         increment_range: float,
-        stop_range: float,
         num_increments: int,
     ):
         """
@@ -35,7 +38,6 @@ class TestAlgo:
             initial_price: Starting price level
             position_size: Size of each position increment
             increment_range: Price difference between levels
-            stop_range: Distance from entry to stop loss
             num_increments: Number of scaling levels
         """
         try:
@@ -43,8 +45,8 @@ class TestAlgo:
             contract = Stock(symbol, "SMART", "USD")
 
             # Determine order actions based on direction
-            entry_action = "BUY" if direction == "LONG" else "SELL"
-            exit_action = "SELL" if direction == "LONG" else "BUY"
+            self.entry_action = "BUY" if direction == "LONG" else "SELL"
+            self.exit_action = "SELL" if direction == "LONG" else "BUY"
 
             # Calculate price levels
             price_levels = self._calculate_price_levels(
@@ -54,12 +56,12 @@ class TestAlgo:
 
             # Place entry orders
             await self._place_entry_orders(
-                contract, entry_action, position_size, price_levels
+                contract, position_size, price_levels, increment_range, num_increments
             )
 
             # Monitor positions and manage stops
             await self._monitor_positions(
-                contract, exit_action, price_levels, increment_range, direction
+                contract, self.exit_action, price_levels, increment_range, direction
             )
 
         except Exception as e:
@@ -89,15 +91,22 @@ class TestAlgo:
     async def _place_entry_orders(
         self,
         contract,
-        entry_action: str,
         position_size: int,
         price_levels: list[Decimal],
+        increment_range: float,
+        num_increment: int,
     ):
         """Place all entry orders at calculated price levels."""
         for price in price_levels:
-            order = StopOrder(entry_action, position_size, price)
+            order = StopOrder(self.entry_action, position_size, price)
             placed_order = self.ib.placeOrder(contract, order)
             self.active_orders.append(placed_order)
+
+
+        exit_profit_price = price_levels[-1] + Decimal(str(increment_range)) if self.entry_action == "BUY" else price_levels[-1] - Decimal(str(increment_range))
+        limitOrder = LimitOrder(self.exit_action, position_size * num_increment, exit_profit_price)
+        place_profit_target = self.ib.placeOrder(contract, limitOrder)
+        self.active_orders.append(place_profit_target)
 
     async def _monitor_positions(
         self,
@@ -121,6 +130,13 @@ class TestAlgo:
                         increment_range,
                         direction,
                     )
+                    self.is_active_trading = True
+
+                if self.is_active_trading and current_position == 0:
+                    logger.info("All positions closed. Exiting position monitoring.")
+                    await close_all_positions(self.ib)
+                    await self.cleanup()
+                    break
 
                 await asyncio.sleep(1)  # Reduce polling frequency
 
