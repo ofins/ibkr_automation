@@ -5,7 +5,7 @@ from ib_insync import IB
 from my_module.logger import Logger
 from my_module.trading_app import TradingApp
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 def main():

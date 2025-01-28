@@ -17,7 +17,7 @@ from my_module.TestAlgo import TestAlgo
 from my_module.timer import timer
 from my_module.util import get_exit_time
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 class MenuOption(Enum):
@@ -84,7 +84,7 @@ class TradingApp:
             trades = self.data.get_session_trades()
             generate_html(trades)
             # TODO: save data in postgres SQL
-            logger.info("Successfully generated report.")
+            Logger.separator("📈 Successfully generated report.")
         except Exception as e:
             logger.error(f"Error in generating report: {str(e)}")
 
@@ -115,9 +115,7 @@ class TradingApp:
     async def startup(self) -> bool:
         try:
             if not await connect_ib(self.ib):
-                logger.error("Failed to connect to IBKR.")
                 return False
-            logger.info("Success. Connected to IBKR.")
             return True
         except Exception as e:
             logger.error(f"Error in startup: {str(e)}")
@@ -125,7 +123,6 @@ class TradingApp:
     async def shutdown(self) -> bool:
         try:
             disconnect_ib(self.ib)
-            logger.info("Disconnected from IBKR.")
         except Exception as e:
             logger.error("Shutdown error: {str(e)}")
 

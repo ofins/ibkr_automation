@@ -8,7 +8,7 @@ from jinja2 import Template
 
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 def create_waterfall_chart(symbol_data):

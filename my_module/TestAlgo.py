@@ -2,12 +2,12 @@ import asyncio
 from decimal import Decimal
 from typing import Literal
 
-from ib_insync import LimitOrder, MarketOrder, Stock, StopOrder
+from ib_insync import LimitOrder, Stock, StopOrder
 
 from my_module.close_all_positions import close_all_positions
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 class TestAlgo:
@@ -129,9 +129,9 @@ class TestAlgo:
                     self.is_active_trading = True
 
                 if self.is_active_trading and current_position == 0:
-                    logger.info("All positions closed. Exiting position monitoring.")
                     await close_all_positions(self.ib)
                     await self.cleanup()
+                    Logger.separator(f"🚫 All positions closed. Exiting position monitoring.")
                     break
 
                 await asyncio.sleep(1)  # Reduce polling frequency
@@ -167,7 +167,7 @@ class TestAlgo:
             self.stop_order = self.ib.placeOrder(
                 contract, StopOrder(exit_action, abs(current_position), stop_price)
             )
-            logger.info(f"Placed new stop order at {stop_price}")
+            logger.info(f"🛑 Placed new stop order at {stop_price}")
 
         elif abs(float(self.stop_order.order.totalQuantity)) != abs(current_position):
             # Update stop order if position size has changed
@@ -177,9 +177,7 @@ class TestAlgo:
             self.stop_order = self.ib.placeOrder(
                 contract, StopOrder(exit_action, abs(current_position), stop_price)
             )
-            logger.info(
-                f"Updated stop order to match position size: {current_position}"
-            )
+            logger.info(f"🛑 Updated stop order to match position size: {current_position}")
 
     def _calculate_stop_price(
         self, base_price: Decimal, increment_range: float, direction: str
@@ -194,13 +192,13 @@ class TestAlgo:
             try:
                 self.ib.cancelOrder(order.order)
             except Exception as e:
-                logger.error(f"Error cancelling order: {e}")
+                logger.info(f"⚠️ Error cancelling order: {e}")
 
         if self.stop_order:
             try:
                 self.ib.cancelOrder(self.stop_order.order)
             except Exception as e:
-                logger.error(f"Error cancelling stop order: {e}")
+                logger.info(f"⚠️ Error cancelling stop order: {e}")
 
         self.active_orders = []
         self.stop_order = None

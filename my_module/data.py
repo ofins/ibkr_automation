@@ -5,7 +5,7 @@ import pandas as pd
 
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 class Data:

@@ -3,7 +3,7 @@ from tabulate import tabulate
 
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 class Level2Table:

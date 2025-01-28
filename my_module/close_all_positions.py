@@ -5,7 +5,7 @@ from ib_insync import MarketOrder
 from my_module.connect import disconnect_ib
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 async def close_all_positions(ib):
@@ -26,7 +26,7 @@ async def close_all_positions(ib):
             while not trade.isDone():
                 await asyncio.sleep(1)
             logger.info(
-                f"Position for {contract.localSymbol} with {abs(pos.position)} shares closed."
+                f"🚫 Position for {contract.localSymbol} with {abs(pos.position)} shares closed."
             )
 
         disconnect_ib(ib)

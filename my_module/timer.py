@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 async def timer(exit_time):

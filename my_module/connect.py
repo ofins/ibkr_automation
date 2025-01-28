@@ -4,7 +4,7 @@ from ib_insync import IB, MarketOrder, util
 
 from my_module.logger import Logger
 
-logger = Logger.get_logger(__name__)
+logger = Logger.get_logger()
 
 
 async def connect_ib(ib):
@@ -20,10 +20,10 @@ async def connect_ib(ib):
     random_number = random.randint(1, 10000)
     try:
         await ib.connectAsync("127.0.0.1", 7497, clientId=random_number)
-        logger.info(f"Connected to IBKR tws API")
+        logger.info(f"🟢 Connected to IBKR tws API")
         return 1
     except Exception as e:
-        logger.error(f"Connection error: {e}")
+        logger.info(f"⛔ Connection error: {e}")
         return 0
 
 
