@@ -44,22 +44,17 @@ class TestAlgo:
             self.is_running = True
             contract = Stock(symbol, "SMART", "USD")
 
-            # Determine order actions based on direction
-            self.entry_action = "BUY" if direction == "LONG" else "SELL"
-            self.exit_action = "SELL" if direction == "LONG" else "BUY"
+            self._set_order_actions(direction)
 
-            # Calculate price levels
             price_levels = self._calculate_price_levels(
                 direction, initial_price, increment_range, num_increments
             )
             logger.info(f"Calculated price levels: {price_levels}")
 
-            # Place entry orders
             await self._place_entry_orders(
                 contract, position_size, price_levels, increment_range, num_increments
             )
 
-            # Monitor positions and manage stops
             await self._monitor_positions(
                 contract, self.exit_action, price_levels, increment_range, direction
             )
@@ -79,14 +74,15 @@ class TestAlgo:
         num_increments: int,
     ) -> list[Decimal]:
         """Calculate all price levels for scaling in."""
-        price_levels = []
-        for i in range(num_increments):
-            if direction == "LONG":
-                price = initial_price + (i * increment_range)
-            else:
-                price = initial_price - (i * increment_range)
-            price_levels.append(round(Decimal(str(price)), 2))
-        return price_levels
+        return [
+            round(Decimal(str(initial_price + (i * increment_range) if direction == "LONG" else initial_price - (i * increment_range))), 2)
+            for i in range(num_increments)
+        ]
+
+    def _set_order_actions(self, direction: str):
+        """Set entry and exit actions based on trade direction."""
+        self.entry_action = "BUY" if direction == "LONG" else "SELL"
+        self.exit_action = "SELL" if direction == "LONG" else "BUY"
 
     async def _place_entry_orders(
         self,
@@ -189,9 +185,8 @@ class TestAlgo:
         self, base_price: Decimal, increment_range: float, direction: str
     ) -> float:
         """Calculate stop price based on direction and base price."""
-        if direction == "LONG":
-            return float(base_price) - increment_range
-        return float(base_price) + increment_range
+        return float(base_price) - increment_range if direction == "LONG" else float(base_price) + increment_range
+
 
     async def cleanup(self):
         """Cancel all active orders."""
