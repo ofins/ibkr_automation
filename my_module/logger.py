@@ -15,6 +15,7 @@ class Logger:
                     "<green>[{time:HH:mm:ss.SSS}]</green> | "
                     "<level>{level: <8}</level> | "
                     "<cyan>{message}</cyan> | "
+                    "<yellow>{file}:{line}</yellow>"
                 ),
                 colorize=True,
             )

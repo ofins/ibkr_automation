@@ -2,18 +2,18 @@ import asyncio
 from decimal import Decimal
 from typing import Literal
 
-from ib_insync import LimitOrder, Stock, StopOrder
+from ib_insync import LimitOrder, Stock, StopLimitOrder, StopOrder
 
-from my_module.close_all_positions import close_all_positions
+from my_module.close_positions import close_positions
 from my_module.logger import Logger
 
 logger = Logger.get_logger()
 
 
-class TestAlgo:
-    def __init__(self, ib):
+class ScalingInAlgo:
+    def __init__(self, ib, instance):
         self.ib = ib
-        self.active_orders = []
+        self.instance = instance
         self.stop_order = None
         self.is_running = False
         self.exit_action = None
@@ -94,15 +94,17 @@ class TestAlgo:
     ):
         """Place all entry orders at calculated price levels."""
         for price in price_levels:
-            order = StopOrder(self.entry_action, position_size, price)
+            # order = StopOrder(self.entry_action, position_size, price)
+            order = StopLimitOrder(self.entry_action, position_size, price, price)
             placed_order = self.ib.placeOrder(contract, order)
-            self.active_orders.append(placed_order)
+            logger.info(f"placed order:{placed_order}")
+            self.instance.add_active_order(placed_order)
 
 
         exit_profit_price = price_levels[-1] + Decimal(str(increment_range)) if self.entry_action == "BUY" else price_levels[-1] - Decimal(str(increment_range))
         limitOrder = LimitOrder(self.exit_action, position_size * num_increment, exit_profit_price)
         place_profit_target = self.ib.placeOrder(contract, limitOrder)
-        self.active_orders.append(place_profit_target)
+        self.instance.add_active_order(place_profit_target)
 
     async def _monitor_positions(
         self,
@@ -129,8 +131,7 @@ class TestAlgo:
                     self.is_active_trading = True
 
                 if self.is_active_trading and current_position == 0:
-                    await close_all_positions(self.ib)
-                    await self.cleanup()
+                    await close_positions(self.ib, self.instance.get_symbol())
                     Logger.separator(f"🚫 All positions closed. Exiting position monitoring.")
                     break
 
@@ -138,7 +139,7 @@ class TestAlgo:
 
             except Exception as e:
                 logger.error(f"Error in position monitoring: {e}")
-                await self.cleanup()
+                await close_positions(self.ib, self.instance.get_symbol())
                 break
 
     def _get_current_position(self, contract) -> float:
@@ -188,7 +189,7 @@ class TestAlgo:
 
     async def cleanup(self):
         """Cancel all active orders."""
-        for order in self.active_orders:
+        for order in self.instance.get_active_orders():
             try:
                 self.ib.cancelOrder(order.order)
             except Exception as e:
@@ -200,5 +201,5 @@ class TestAlgo:
             except Exception as e:
                 logger.info(f"⚠️ Error cancelling stop order: {e}")
 
-        self.active_orders = []
+        self.instance.set_active_orders([])
         self.stop_order = None

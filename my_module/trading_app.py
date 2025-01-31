@@ -8,12 +8,13 @@ from typing import Any, Callable, Coroutine, Dict, Optional, Union
 from ib_insync import IB
 
 import my_module.trade_input as trade_input
+from my_module.algo.scaling_in_algo import ScalingInAlgo
 from my_module.close_all_positions import close_all_positions
 from my_module.connect import connect_ib, disconnect_ib
 from my_module.data import Data
+from my_module.instance import Instance
 from my_module.logger import Logger
 from my_module.plot import generate_html
-from my_module.TestAlgo import TestAlgo
 from my_module.timer import timer
 from my_module.util import get_exit_time
 
@@ -31,6 +32,10 @@ class MenuOption(Enum):
 class MenuChoice:
     option: MenuOption
     description: str
+
+
+instance = Instance()
+instance.set_symbol(trade_input.SYMBOL)
 
 
 class TradingApp:
@@ -69,12 +74,11 @@ class TradingApp:
             if result:
                 logger.info("Timer finished. Proceed to close all positions...")
                 await close_all_positions(self.ib)
-            
-            await self.fetch_trades()   
-            subprocess.run("taskkill /F /IM code.exe", shell=True) # close vs code
+
+            await self.fetch_trades()
+            # subprocess.run("taskkill /F /IM code.exe", shell=True)  # close vs code
         except Exception as e:
             logger.error(f"Error in close trades operation: {str(e)}")
-
 
     async def fetch_trades(self) -> None:
         try:
@@ -90,9 +94,16 @@ class TradingApp:
 
     async def run_test_algo(self) -> None:
         try:
-            trader = TestAlgo(self.ib)
-            await trader.run(trade_input.SYMBOL, trade_input.DIRECTION, trade_input.ENTRY_PRICE, trade_input.POSITION_SIZE, trade_input.INCREMENT_RANGE, trade_input.NUM_INCREMENTS)
-            await self.fetch_trades()   
+            trader = ScalingInAlgo(self.ib, instance)
+            await trader.run(
+                trade_input.SYMBOL,
+                trade_input.DIRECTION,
+                trade_input.ENTRY_PRICE,
+                trade_input.POSITION_SIZE,
+                trade_input.INCREMENT_RANGE,
+                trade_input.NUM_INCREMENTS,
+            )
+            await self.fetch_trades()
         except Exception as e:
             logger.error(f"Error in running test algo: {str(e)}")
 
