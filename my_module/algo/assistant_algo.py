@@ -16,7 +16,7 @@ class AssistantAlgo:
         try:
             self.is_running = True
             positions = self.ib.positions()
-            
+
             for pos in positions:
                 if pos.contract.symbol in self.active_orders:
                     continue
@@ -27,4 +27,3 @@ class AssistantAlgo:
             raise
         finally:
             self.is_running = False
-    
