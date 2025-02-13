@@ -17,6 +17,7 @@ from my_module.logger import Logger
 from my_module.plot import generate_html
 from my_module.timer import timer
 from my_module.util import get_exit_time
+from my_module.algo.reversal_algo import ReversalAlgo
 
 logger = Logger.get_logger()
 
@@ -24,7 +25,8 @@ logger = Logger.get_logger()
 class MenuOption(Enum):
     CLOSE_TRADES = auto()
     FETCH_TRADES = auto()
-    TEST_ALGO = auto()
+    SCALE_IN_ALGO = auto() # place orders / monitor stop
+    REVERSAL_ALGO = auto() # detect trend reversal
     EXIT = auto()
 
 
@@ -44,8 +46,9 @@ class TradingApp:
     MENU_CHOICES = {
         "1": MenuChoice(MenuOption.CLOSE_TRADES, "Run close trades timer"),
         "2": MenuChoice(MenuOption.FETCH_TRADES, "Generate trade report"),
-        "3": MenuChoice(MenuOption.TEST_ALGO, "Run TestAlgo"),
-        "4": MenuChoice(MenuOption.EXIT, "Exit"),
+        "3": MenuChoice(MenuOption.SCALE_IN_ALGO, "Run Scale-in algo"),
+        "4": MenuChoice(MenuOption.REVERSAL_ALGO, "Run Reversal algo"),
+        "5": MenuChoice(MenuOption.EXIT, "Exit"),
     }
 
     def __init__(self):
@@ -92,7 +95,7 @@ class TradingApp:
         except Exception as e:
             logger.error(f"Error in generating report: {str(e)}")
 
-    async def run_test_algo(self) -> None:
+    async def run_scale_in_algo(self) -> None:
         try:
             trader = ScalingInAlgo(self.ib, instance)
             await trader.run(
@@ -107,11 +110,19 @@ class TradingApp:
         except Exception as e:
             logger.error(f"Error in running test algo: {str(e)}")
 
+    async def run_reversal_algo(self) -> None:
+        try:
+            reversal = ReversalAlgo(self.ib)
+            await reversal.run()
+        except Exception as e:
+            logger.error(f"Error in running reversal algo: {str(e)}")
+
     async def handle_menu_choice(self, choice: MenuOption) -> bool:
         handlers: Dict[MenuOption, Callable[[], Coroutine[Any, Any, Any] | bool]] = {
             MenuOption.CLOSE_TRADES: self.close_trades,
             MenuOption.FETCH_TRADES: self.fetch_trades,
-            MenuOption.TEST_ALGO: self.run_test_algo,
+            MenuOption.SCALE_IN_ALGO: self.run_scale_in_algo,
+            MenuOption.REVERSAL_ALGO: self.run_reversal_algo,
             MenuOption.EXIT: lambda: False,
         }
 
