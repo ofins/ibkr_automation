@@ -3,6 +3,7 @@ import asyncio
 import numpy as np
 import pandas as pd
 from ib_insync import *
+from tabulate import tabulate
 
 from my_module.indicators import Indicators
 from my_module.logger import Logger
@@ -39,7 +40,7 @@ columns = [
     "consolidating",
     "reversal_up",
     "reversal_down",
-    "retrace_percentage"
+    "retrace_percentage",
 ]
 
 df = pd.DataFrame(columns=columns)
@@ -47,6 +48,7 @@ df = pd.DataFrame(columns=columns)
 
 def fetch_historical_data(ib, contract):
     global df
+
     bars = ib.reqHistoricalData(
         contract,
         endDateTime="",
@@ -66,34 +68,35 @@ def fetch_historical_data(ib, contract):
             "low": bar.low,
             "close": bar.close,
             "volume": bar.volume,
-            "vwap": np.nan,
-            "std_dev": np.nan,
-            "vwap_upper": np.nan,
-            "vwap_lower": np.nan,
-            "price_extension": np.nan,
-            "high_of_day": np.nan,
-            "low_of_day": np.nan,
-            "volume_ma": np.nan,
-            "volume_trend": np.nan,
-            "extended_up": np.nan,
-            "extended_down": np.nan,
-            "breakout_up": np.nan,
-            "breakout_down": np.nan,
-            "new_high": np.nan,
-            "new_low": np.nan,
-            "trend_up": np.nan,
-            "trend_down": np.nan,
-            "rsi": np.nan,
-            "consolidating": np.nan,
-            "reversal_up": np.nan,
-            "reversal_down": np.nan,
-            "retrace_percentage": np.nan,
-
+            "vwap": 0,
+            "std_dev": 0,
+            "vwap_upper": 0,
+            "vwap_lower": 0,
+            "price_extension": 0,
+            "high_of_day": 0,
+            "low_of_day": 0,
+            "volume_ma": 0,
+            "volume_trend": 0,
+            "extended_up": 0,
+            "extended_down": 0,
+            "breakout_up": 0,
+            "breakout_down": 0,
+            "new_high": 0,
+            "new_low": 0,
+            "trend_up": False,
+            "trend_down": False,
+            "rsi": 0,
+            "consolidating": 0,
+            "reversal_up": False,
+            "reversal_down": False,
+            "retrace_percentage": 0,
+            "retrace_level": 0,
         }
         for bar in bars
     ]
 
     df = pd.DataFrame(new_data)
+
     open_price = df.iloc[0]["open"]
 
     df["vwap"] = Indicators.vwap(df)
@@ -113,29 +116,54 @@ def fetch_historical_data(ib, contract):
     df["trend_down"] = Indicators.trend_down(df)
     df["rsi"] = Indicators.calculate_rsi(df)
 
-    df["retrace_percentage"] = Indicators.retrace_percentage(df, open_price, "up" if df["trend_up"] else "down") 
-    df["reverse_up"] = Indicators.reversal_up(df)
-    df["reverse_down"] = Indicators.reversal_down(df)
+    df["retrace_percentage"] = Indicators.retrace_percentage(
+        df, open_price, "up" if df["trend_up"].iloc[-1] else "down"
+    )
+    df["reversal_up"] = Indicators.reversal_up(df)
+    df["reversal_down"] = Indicators.reversal_down(df)
 
+    # Display only specific columns
+    columns_to_display = [
+        "time",
+        "close",
+        "vwap",
+        "vwap_upper",
+        "vwap_lower",
+        "breakout_upper_vwap",
+        "breakout_lower_vwap",
+        "rsi",
+        "retrace_percentage",
+        "reversal_up",
+        "reversal_down",
+    ]
+
+    logger.info(
+        "\n"
+        + tabulate(
+            df[columns_to_display],
+            headers="keys",
+            tablefmt="fancy_grid",
+            showindex=False,
+        )
+    )
 
     check_alerts()
 
 
 def check_alerts():
     logger.info("\nChecking for signals...")
-    
     if len(df) < 1:
         return
     latest = df.iloc[-1]
     logger.info(latest)
 
-    if latest["reversal_up"] is True:
+    if bool(latest["reversal_up"] is True):
         logger.info("\nUPWARD REVERSAL ALERT 🔼")
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
         speak.say("Upward reversal alert")
 
-    if latest["reversal_down"] is True:
+    if bool(latest["reversal_down"]) is True:
         logger.info("\nDOWNWARD REVERSAL ALERT 🔽")
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
@@ -143,18 +171,17 @@ def check_alerts():
 
 
 class ReversalAlgo:
-    def __init__(self, contract, ib):
+    def __init__(self, ib, contract):
         self.ib = ib
         self.is_running = False
         self.contract = contract
 
     async def run(self):
-        fetch_historical_data(self.ib, self.contract)
-
         try:
             self.is_running = True
             while self.is_running:
-                await self.ib.sleep(15)
+                fetch_historical_data(self.ib, self.contract)
+                self.ib.sleep(60 * 3)
         except KeyboardInterrupt:
             self.is_running = False
             raise

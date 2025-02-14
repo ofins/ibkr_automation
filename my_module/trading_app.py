@@ -114,8 +114,9 @@ class TradingApp:
             logger.error(f"Error in running test algo: {str(e)}")
 
     async def run_reversal_algo(self) -> None:
+        stock = Stock(trade_input.WATCH_STOCK, "SMART", "USD")
         try:
-            reversal = ReversalAlgo(self.ib, Stock(trade_input.WATCH_STOCK, "SMART", "USD"))
+            reversal = ReversalAlgo(self.ib, stock)
             await reversal.run()
         except Exception as e:
             logger.error(f"Error in running reversal algo: {str(e)}")
