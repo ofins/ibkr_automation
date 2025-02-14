@@ -5,6 +5,11 @@ import pandas as pd
 from ib_insync import *
 
 from my_module.indicators import Indicators
+from my_module.logger import Logger
+from my_module.utils.speak import Speak
+
+logger = Logger.get_logger()
+speak = Speak()
 
 columns = [
     "time",
@@ -34,6 +39,7 @@ columns = [
     "consolidating",
     "reversal_up",
     "reversal_down",
+    "retrace_percentage"
 ]
 
 df = pd.DataFrame(columns=columns)
@@ -50,7 +56,7 @@ def fetch_historical_data(ib, contract):
         useRTH=True,
         formatDate=1,
     )
-    # print(bars)
+    # logger.info(bars)
 
     new_data = [
         {
@@ -81,11 +87,14 @@ def fetch_historical_data(ib, contract):
             "consolidating": np.nan,
             "reversal_up": np.nan,
             "reversal_down": np.nan,
+            "retrace_percentage": np.nan,
+
         }
         for bar in bars
     ]
 
     df = pd.DataFrame(new_data)
+    open_price = df.iloc[0]["open"]
 
     df["vwap"] = Indicators.vwap(df)
     df["std_dev"] = Indicators.std_dev(df)
@@ -102,32 +111,42 @@ def fetch_historical_data(ib, contract):
     df["breakout_lower_vwap"] = Indicators.breakout_lower_vwap(df)
     df["trend_up"] = Indicators.trend_up(df)
     df["trend_down"] = Indicators.trend_down(df)
+    df["rsi"] = Indicators.calculate_rsi(df)
+
+    df["retrace_percentage"] = Indicators.retrace_percentage(df, open_price, "up" if df["trend_up"] else "down") 
+    df["reverse_up"] = Indicators.reversal_up(df)
+    df["reverse_down"] = Indicators.reversal_down(df)
+
 
     check_alerts()
 
 
 def check_alerts():
+    logger.info("\nChecking for signals...")
+    
     if len(df) < 1:
         return
     latest = df.iloc[-1]
-    print(latest)
+    logger.info(latest)
 
     if latest["reversal_up"] is True:
-        print("\nUPWARD REVERSAL ALERT 🔼")
-        print(f"Time: {latest['time']}")
-        print(f"Price: ${latest['close']:.2f}")
+        logger.info("\nUPWARD REVERSAL ALERT 🔼")
+        logger.info(f"Time: {latest['time']}")
+        logger.info(f"Price: ${latest['close']:.2f}")
+        speak.say("Upward reversal alert")
 
     if latest["reversal_down"] is True:
-        print("\nDOWNWARD REVERSAL ALERT 🔽")
-        print(f"Time: {latest['time']}")
-        print(f"Price: ${latest['close']:.2f}")
+        logger.info("\nDOWNWARD REVERSAL ALERT 🔽")
+        logger.info(f"Time: {latest['time']}")
+        logger.info(f"Price: ${latest['close']:.2f}")
+        speak.say("Downward reversal alert")
 
 
 class ReversalAlgo:
-    def __init__(self, ib):
+    def __init__(self, contract, ib):
         self.ib = ib
         self.is_running = False
-        self.contract = Stock("AAPL", "SMART", "USD")
+        self.contract = contract
 
     async def run(self):
         fetch_historical_data(self.ib, self.contract)
@@ -135,10 +154,7 @@ class ReversalAlgo:
         try:
             self.is_running = True
             while self.is_running:
-                # await asyncio.sleep(5)
-                await self.ib.sleep(5)
-                # self.ib.sleep(5)
-                # pass
+                await self.ib.sleep(15)
         except KeyboardInterrupt:
             self.is_running = False
             raise

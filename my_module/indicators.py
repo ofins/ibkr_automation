@@ -78,3 +78,19 @@ class Indicators:
     @staticmethod
     def trend_down(df):
         return df["extended_down"] & df["breakout_lower_vwap"]
+
+    # Reversal detection
+    @staticmethod
+    def retrace_percentage(df, open_price, direction):
+        if direction == "up":
+            return abs(df["close"] - df["high_of_day"]) / abs(df["high_of_day"]- open_price)
+        else:
+            return abs(df["close"] - df["low_of_day"]) / abs(open_price - df["low_of_day"])
+        
+    @staticmethod
+    def reversal_up(df):
+        return df["retrace_percentage"] > 0.25 & df["trend_down"]
+    
+    @staticmethod
+    def reversal_down(df):
+        return df["retrace_percentage"] > 0.25 & df["trend_up"]

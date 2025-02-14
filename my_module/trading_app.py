@@ -6,7 +6,7 @@ from enum import Enum, auto
 from typing import Any, Callable, Coroutine, Dict, Optional, Union
 
 import nest_asyncio
-from ib_insync import IB
+from ib_insync import *
 
 import my_module.trade_input as trade_input
 from my_module.algo.reversal_algo import ReversalAlgo
@@ -115,7 +115,7 @@ class TradingApp:
 
     async def run_reversal_algo(self) -> None:
         try:
-            reversal = ReversalAlgo(self.ib)
+            reversal = ReversalAlgo(self.ib, Stock(trade_input.WATCH_STOCK, "SMART", "USD"))
             await reversal.run()
         except Exception as e:
             logger.error(f"Error in running reversal algo: {str(e)}")
