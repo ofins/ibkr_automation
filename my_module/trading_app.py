@@ -5,9 +5,11 @@ from datetime import datetime, time, timedelta, timezone
 from enum import Enum, auto
 from typing import Any, Callable, Coroutine, Dict, Optional, Union
 
+import nest_asyncio
 from ib_insync import IB
 
 import my_module.trade_input as trade_input
+from my_module.algo.reversal_algo import ReversalAlgo
 from my_module.algo.scaling_in_algo import ScalingInAlgo
 from my_module.close_all_positions import close_all_positions
 from my_module.connect import connect_ib, disconnect_ib
@@ -17,7 +19,8 @@ from my_module.logger import Logger
 from my_module.plot import generate_html
 from my_module.timer import timer
 from my_module.util import get_exit_time
-from my_module.algo.reversal_algo import ReversalAlgo
+
+nest_asyncio.apply()
 
 logger = Logger.get_logger()
 
@@ -25,8 +28,8 @@ logger = Logger.get_logger()
 class MenuOption(Enum):
     CLOSE_TRADES = auto()
     FETCH_TRADES = auto()
-    SCALE_IN_ALGO = auto() # place orders / monitor stop
-    REVERSAL_ALGO = auto() # detect trend reversal
+    SCALE_IN_ALGO = auto()  # place orders / monitor stop
+    REVERSAL_ALGO = auto()  # detect trend reversal
     EXIT = auto()
 
 
@@ -71,7 +74,7 @@ class TradingApp:
     async def close_trades(self) -> None:
         try:
             exit_time = get_exit_time()
-            timer_task = asyncio.create_task(timer(exit_time))
+            timer_task = timer(exit_time)
 
             result = await timer_task
             if result:
