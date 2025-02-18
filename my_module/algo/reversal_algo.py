@@ -99,28 +99,28 @@ def fetch_historical_data(ib, contract):
 
     open_price = df.iloc[0]["open"]
 
+    df["high_of_day"] = Indicators.high_of_day(df)
+    df["low_of_day"] = Indicators.low_of_day(df)
     df["vwap"] = Indicators.vwap(df)
     df["std_dev"] = Indicators.std_dev(df)
     df["vwap_upper"] = Indicators.vwap_upper(df, df["std_dev"])
     df["vwap_lower"] = Indicators.vwap_lower(df, df["std_dev"])
-    df["high_of_day"] = Indicators.high_of_day(df)
-    df["low_of_day"] = Indicators.low_of_day(df)
-    df["price_extension"] = Indicators.price_extension(df, df.iloc[0]["open"])
+    df["price_extension"] = Indicators.price_extension(df, open_price)
     df["volume_ma"] = Indicators.volume_ma(df)
     df["volume_trend"] = Indicators.volume_trend(df)
     df["extended_up"] = Indicators.extended_up(df)
     df["extended_down"] = Indicators.extended_down(df)
-    df["breakout_upper_vwap"] = Indicators.breakout_upper_vwap(df)
-    df["breakout_lower_vwap"] = Indicators.breakout_lower_vwap(df)
-    df["trend_up"] = Indicators.trend_up(df)
-    df["trend_down"] = Indicators.trend_down(df)
     df["rsi"] = Indicators.calculate_rsi(df)
 
     df["retrace_percentage"] = Indicators.retrace_percentage(
-        df, open_price, "up" if df["trend_up"].iloc[-1] else "down"
+        df, open_price, "up" if df["close"].iloc[-1] > open_price else "down"
     )
-    df["reversal_up"] = Indicators.reversal_up(df)
-    df["reversal_down"] = Indicators.reversal_down(df)
+    # df["breakout_upper_vwap"] = Indicators.breakout_upper_vwap(df)
+    # df["breakout_lower_vwap"] = Indicators.breakout_lower_vwap(df)
+    # df["trend_up"] = Indicators.trend_up(df)
+    # df["trend_down"] = Indicators.trend_down(df)
+    # df["reversal_up"] = Indicators.reversal_up(df)
+    # df["reversal_down"] = Indicators.reversal_down(df)
 
     # Display only specific columns
     columns_to_display = [
@@ -129,12 +129,12 @@ def fetch_historical_data(ib, contract):
         "vwap",
         "vwap_upper",
         "vwap_lower",
-        "breakout_upper_vwap",
-        "breakout_lower_vwap",
+        # "breakout_upper_vwap",
+        # "breakout_lower_vwap",
         "rsi",
-        "retrace_percentage",
-        "reversal_up",
-        "reversal_down",
+        # "retrace_percentage",
+        # "reversal_up",
+        # "reversal_down",
     ]
 
     logger.info(
@@ -157,13 +157,25 @@ def check_alerts():
     latest = df.iloc[-1]
     logger.info(latest)
 
-    if bool(latest["reversal_up"] is True):
+    reversal_up = bool(
+        latest["rsi"] <= 30
+        and latest["open"] < latest["close"]  # close with green candle
+        and latest["close"] < latest["vwap_lower"]  # close below lower vwap
+    )
+
+    reversal_down = bool(
+        latest["rsi"] >= 70
+        and latest["open"] > latest["close"]  # close with red candle
+        and latest["close"] > latest["vwap_upper"]  # close above upper vwap
+    )
+
+    if reversal_up:
         logger.info("\nUPWARD REVERSAL ALERT 🔼")
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
         speak.say("Upward reversal alert")
 
-    if bool(latest["reversal_down"]) is True:
+    if reversal_down:
         logger.info("\nDOWNWARD REVERSAL ALERT 🔽")
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")

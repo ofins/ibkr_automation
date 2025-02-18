@@ -16,7 +16,15 @@ class Indicators:
         avg_gain = gain.rolling(window=periods).mean()
         avg_loss = loss.rolling(window=periods).mean()
 
-        rs = avg_gain / avg_loss
+        gain_std = gain.rolling(window=periods).std()
+        loss_std = loss.rolling(window=periods).std()
+
+        avg_gain_bb = avg_gain + (gain_std)
+        avg_loss_bb = avg_loss + (loss_std)
+
+        rs = avg_gain_bb / avg_loss_bb
+
+        # rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
