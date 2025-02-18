@@ -7,6 +7,8 @@ from tabulate import tabulate
 
 from my_module.indicators import Indicators
 from my_module.logger import Logger
+from my_module.trade_input import WATCH_STOCK
+from my_module.utils.discord_bot import bot
 from my_module.utils.speak import Speak
 
 logger = Logger.get_logger()
@@ -58,7 +60,6 @@ def fetch_historical_data(ib, contract):
         useRTH=True,
         formatDate=1,
     )
-    # logger.info(bars)
 
     new_data = [
         {
@@ -115,26 +116,14 @@ def fetch_historical_data(ib, contract):
     df["retrace_percentage"] = Indicators.retrace_percentage(
         df, open_price, "up" if df["close"].iloc[-1] > open_price else "down"
     )
-    # df["breakout_upper_vwap"] = Indicators.breakout_upper_vwap(df)
-    # df["breakout_lower_vwap"] = Indicators.breakout_lower_vwap(df)
-    # df["trend_up"] = Indicators.trend_up(df)
-    # df["trend_down"] = Indicators.trend_down(df)
-    # df["reversal_up"] = Indicators.reversal_up(df)
-    # df["reversal_down"] = Indicators.reversal_down(df)
 
-    # Display only specific columns
     columns_to_display = [
         "time",
         "close",
         "vwap",
         "vwap_upper",
         "vwap_lower",
-        # "breakout_upper_vwap",
-        # "breakout_lower_vwap",
         "rsi",
-        # "retrace_percentage",
-        # "reversal_up",
-        # "reversal_down",
     ]
 
     logger.info(
@@ -147,26 +136,38 @@ def fetch_historical_data(ib, contract):
         )
     )
 
-    check_alerts()
+    return df
 
 
-def check_alerts():
+async def check_alerts(df):
     logger.info("\nChecking for signals...")
     if len(df) < 1:
         return
     latest = df.iloc[-1]
     logger.info(latest)
 
+    message = f"""
+>>> 📢 **Trading Alert**
+
+📈 **Symbol:** {WATCH_STOCK}  
+📅 **Time:** {latest['time']}  
+💰 **Price:** ${latest['close']:.2f}  
+📊 **RSI:** {latest['rsi']:.2f}  
+🔵 **VWAP:** {latest['vwap']:.2f}  
+🔺 **Upper VWAP:** {latest['vwap_upper']:.2f}  
+🔻 **Lower VWAP:** {latest['vwap_lower']:.2f}
+
+"""
     reversal_up = bool(
-        latest["rsi"] <= 30
-        and latest["open"] < latest["close"]  # close with green candle
-        and latest["close"] < latest["vwap_lower"]  # close below lower vwap
+        latest["rsi"] <= 50
+        and latest["open"] < latest["close"]
+        and latest["close"] < latest["vwap_lower"]
     )
 
     reversal_down = bool(
-        latest["rsi"] >= 70
-        and latest["open"] > latest["close"]  # close with red candle
-        and latest["close"] > latest["vwap_upper"]  # close above upper vwap
+        latest["rsi"] >= 50
+        and latest["open"] > latest["close"]
+        and latest["close"] > latest["vwap_upper"]
     )
 
     if reversal_up:
@@ -174,12 +175,16 @@ def check_alerts():
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
         speak.say("Upward reversal alert")
+        message += "🔼 **Upward Reversal Detected!**"
+        await bot.send_message(message)
 
     if reversal_down:
         logger.info("\nDOWNWARD REVERSAL ALERT 🔽")
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
         speak.say("Downward reversal alert")
+        message += "🔽 **Downward Reversal Detected!**"
+        await bot.send_message(message)
 
 
 class ReversalAlgo:
@@ -192,7 +197,8 @@ class ReversalAlgo:
         try:
             self.is_running = True
             while self.is_running:
-                fetch_historical_data(self.ib, self.contract)
+                data = fetch_historical_data(self.ib, self.contract)
+                await check_alerts(data)
                 self.ib.sleep(60 * 3)
         except KeyboardInterrupt:
             self.is_running = False
