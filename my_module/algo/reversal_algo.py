@@ -2,17 +2,19 @@ import asyncio
 
 import numpy as np
 import pandas as pd
+import requests
 from ib_insync import *
 from tabulate import tabulate
 
 from my_module.indicators import Indicators
 from my_module.logger import Logger
 from my_module.trade_input import WATCH_STOCK
-from my_module.utils.discord_bot import bot
 from my_module.utils.speak import Speak
 
 logger = Logger.get_logger()
 speak = Speak()
+
+url = "http://localhost:8000/send-message"
 
 columns = [
     "time",
@@ -146,7 +148,8 @@ async def check_alerts(df):
     latest = df.iloc[-1]
     logger.info(latest)
 
-    message = f"""
+    data = {
+        "content": f"""
 >>> 📢 **Trading Alert**
 
 📈 **Symbol:** {WATCH_STOCK}  
@@ -156,8 +159,9 @@ async def check_alerts(df):
 🔵 **VWAP:** {latest['vwap']:.2f}  
 🔺 **Upper VWAP:** {latest['vwap_upper']:.2f}  
 🔻 **Lower VWAP:** {latest['vwap_lower']:.2f}
-
-"""
+        """
+    }
+    # requests.post(url, json=data)
     reversal_up = bool(
         latest["rsi"] <= 50
         and latest["open"] < latest["close"]
@@ -175,16 +179,15 @@ async def check_alerts(df):
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
         speak.say("Upward reversal alert")
-        message += "🔼 **Upward Reversal Detected!**"
-        await bot.send_message(message)
-
+        data["content"] += "\n🔼 **Upward Reversal Detected!**"
+        requests.post(url, json=data)
     if reversal_down:
         logger.info("\nDOWNWARD REVERSAL ALERT 🔽")
         logger.info(f"Time: {latest['time']}")
         logger.info(f"Price: ${latest['close']:.2f}")
         speak.say("Downward reversal alert")
-        message += "🔽 **Downward Reversal Detected!**"
-        await bot.send_message(message)
+        data["content"] += "\n🔽 **Downward Reversal Detected!**"
+        requests.post(url, json=data)
 
 
 class ReversalAlgo:

@@ -1,12 +1,9 @@
 import asyncio
-import signal
 
-import discord
 from ib_insync import IB
 
 from my_module.logger import Logger
 from my_module.trading_app import TradingApp
-from my_module.utils.discord_bot import bot
 
 logger = Logger.get_logger()
 
@@ -14,11 +11,7 @@ logger = Logger.get_logger()
 async def main():
     try:
         app = TradingApp()
-
-        trading_task = asyncio.create_task(app.run())
-        bot_task = asyncio.create_task(bot.start(bot.DISCORD_BOT_TOKEN))
-
-        await asyncio.gather(trading_task, bot_task)  # Run both concurrently
+        await asyncio.create_task(app.run())
     except KeyboardInterrupt:
         logger.error("Application terminated by user.")
     except Exception as e:
