@@ -24,6 +24,7 @@ bot_instance: Optional[discord.Client] = None
 
 class Message(BaseModel):
     content: str
+    image_path: Optional[str] = None
 
 
 @app.on_event("startup")
@@ -47,8 +48,17 @@ async def send_message(message: Message):
         channel = bot_instance.get_channel(CHANNEL_ID)
         if not channel:
             raise HTTPException(status_code=404, detail="Channel not found")
+        print(message.image_path)
+        if message.image_path:
+            # Check if the image exists at the given path
+            if not os.path.exists(message.image_path):
+                raise HTTPException(status_code=404, detail="Image file not found")
 
-        await channel.send(message.content)
+            # Send the message with the image file
+            await channel.send(message.content, file=discord.File(message.image_path))
+        else:
+            # If no image, send the message only
+            await channel.send(message.content)
         return {"status": "Message sent successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -9,6 +9,7 @@ from tabulate import tabulate
 from my_module.indicators import Indicators
 from my_module.logger import Logger
 from my_module.trade_input import WATCH_STOCK
+from my_module.utils.candle_stick_chart import create_candle_chart
 from my_module.utils.speak import Speak
 
 logger = Logger.get_logger()
@@ -142,25 +143,13 @@ def fetch_historical_data(ib, contract):
 
 
 async def check_alerts(df):
+    data = None
     logger.info("\nChecking for signals...")
     if len(df) < 1:
         return
     latest = df.iloc[-1]
     logger.info(latest)
 
-    data = {
-        "content": f"""
->>> 📢 **Trading Alert**
-
-📈 **Symbol:** {WATCH_STOCK}  
-📅 **Time:** {latest['time']}  
-💰 **Price:** ${latest['close']:.2f}  
-📊 **RSI:** {latest['rsi']:.2f}  
-🔵 **VWAP:** {latest['vwap']:.2f}  
-🔺 **Upper VWAP:** {latest['vwap_upper']:.2f}  
-🔻 **Lower VWAP:** {latest['vwap_lower']:.2f}
-        """
-    }
     # requests.post(url, json=data)
     reversal_up = bool(
         latest["rsi"] <= 50
@@ -173,6 +162,24 @@ async def check_alerts(df):
         and latest["open"] > latest["close"]
         and latest["close"] > latest["vwap_upper"]
     )
+
+    if reversal_up or reversal_down:
+        image_path = await create_candle_chart(df)
+
+        data = {
+            "content": f"""
+    >>> 📢 **Trading Alert**
+
+    📈 **Symbol:** {WATCH_STOCK}  
+    📅 **Time:** {latest['time']}  
+    💰 **Price:** ${latest['close']:.2f}  
+    📊 **RSI:** {latest['rsi']:.2f}  
+    🔵 **VWAP:** {latest['vwap']:.2f}  
+    🔺 **Upper VWAP:** {latest['vwap_upper']:.2f}  
+    🔻 **Lower VWAP:** {latest['vwap_lower']:.2f}
+            """,
+            "image_path": image_path,
+        }
 
     if reversal_up:
         logger.info("\nUPWARD REVERSAL ALERT 🔼")
