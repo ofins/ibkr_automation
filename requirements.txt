@@ -2,3 +2,7 @@ ib_insync
 pandas
 numpy
 yfinance
+discord
+fastapi
+python-dotenv
+asyncio
