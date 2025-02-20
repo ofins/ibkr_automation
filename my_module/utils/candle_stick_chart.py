@@ -57,7 +57,7 @@ async def create_candle_chart(df):
     #     xaxis_rangeslider_visible=False,
     # )
 
-    date_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    date_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     folder_path = "dist/images"
     file_path = os.path.join(folder_path, f"{date_time}.png")
     file_path = file_path.replace("\\", "/")

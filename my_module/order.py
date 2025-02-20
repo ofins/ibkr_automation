@@ -1,6 +1,6 @@
 from typing import Union
 
-from ib_insync import IB, LimitOrder, MarketOrder, Stock
+from ib_insync import IB, LimitOrder, MarketOrder, Stock, StopOrder
 
 
 def place_order(
@@ -25,6 +25,8 @@ def place_order(
     """
     if order_type.upper() == "LIMIT" and price is not None:
         order = LimitOrder(action, quantity, price)
+    elif order_type.upper() == "STOP":
+        order = StopOrder(action, quantity, price)
     else:
         order = MarketOrder(action, quantity)
 

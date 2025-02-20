@@ -1,11 +1,16 @@
 import asyncio
 import os
+import re
 from typing import Optional
 
 import discord
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from ib_insync import IB, Stock
 from pydantic import BaseModel
+
+from my_module.connect import connect_ib
+from my_module.order import place_order
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +22,8 @@ app = FastAPI()
 intents = discord.Intents.default()
 intents.message_content = True
 bot = discord.Client(intents=intents)
+ib = IB()
+
 
 # Store bot instance
 bot_instance: Optional[discord.Client] = None
@@ -32,6 +39,9 @@ async def startup_event():
     global bot_instance
     bot_instance = bot
     asyncio.create_task(bot.start(TOKEN))
+    # asyncio.create_task(connect_ib(ib))
+    # asyncio.gather(connect_ib(ib), bot.start(TOKEN))
+    await connect_ib(ib)
 
 
 @app.get("/")
@@ -77,8 +87,83 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    if message.content.lower() == "!pug":
-        await message.channel.send("what's the magic phrase?")
+    msg = message.content.lower()
+
+    trade_pattern = r"!p\s+(long|short)\s+(\w+)\s+(\d+)\s+([\d.]+)/([\d.]+)/([\d.]+)"
+    trade_match = re.match(trade_pattern, msg)
+
+    if trade_match:
+        direction = trade_match.group(1)
+        symbol = trade_match.group(2)
+        quantity = int(trade_match.group(3))
+        entry = float(trade_match.group(4))
+        take_profit = float(trade_match.group(5))
+        stop_loss = float(trade_match.group(6))
+
+        print(
+            f"Trade order received: {direction} {symbol} {quantity} {entry} {take_profit} {stop_loss}"
+        )
+        if direction == "long" and (take_profit < entry or stop_loss > entry):
+            await message.channel.send("Invalid trade parameters! 🛑")
+            return
+        elif direction == "short" and (take_profit > entry or stop_loss < entry):
+            await message.channel.send("Invalid trade parameters! 🛑")
+            return
+
+        response = (
+            f">>> 📢 **Trade Order Received**\n\n"
+            f"🟢 **Direction:** {direction.upper()}\n"
+            f"📈 **Symbol:** {symbol.upper()}\n"
+            f"💰 **Entry Price:** {entry}\n"
+            f"📊 **Quantity:** {quantity}\n"
+            f"🎯 **Exit Price:** {take_profit}\n"
+            f"🛑 **Stop Loss:** {stop_loss}\n\n"
+            f"✅ **Type 'yes' to execute the trade, or 'no' to abort.**"
+        )
+
+        await message.channel.send(response)
+
+        def check(m):
+            return (
+                m.content.lower() in ["yes", "no"]
+                and m.channel == message.channel
+                and m.author == message.author
+            )
+
+        try:
+            confirmation = await bot.wait_for("message", check=check, timeout=60)
+            if confirmation.content.lower() == "yes":
+                await message.channel.send("Trade confirmed!🚀\nExecuting... ")
+                stock = Stock(symbol, "SMART", "USD")
+                place_order(
+                    ib,
+                    stock,
+                    "BUY" if direction == "long" else "SELL",
+                    quantity,
+                    "LIMIT",
+                    entry,
+                )
+                place_order(
+                    ib,
+                    stock,
+                    "SELL" if direction == "long" else "BUY",
+                    quantity,
+                    "LIMIT",
+                    take_profit,
+                )
+                place_order(
+                    ib,
+                    stock,
+                    "SELL" if direction == "long" else "BUY",
+                    quantity,
+                    "STOP",
+                    stop_loss,
+                )
+                await message.channel.send("Trade executed! ✅")
+            else:
+                await message.channel.send("Trade cancelled! ❌")
+        except asyncio.TimeoutError:
+            await message.channel.send("Trade confirmation timed out! ⏰")
 
 
 import uvicorn

@@ -152,13 +152,13 @@ async def check_alerts(df):
 
     # requests.post(url, json=data)
     reversal_up = bool(
-        latest["rsi"] <= 50
+        latest["rsi"] <= 30
         and latest["open"] < latest["close"]
         and latest["close"] < latest["vwap_lower"]
     )
 
     reversal_down = bool(
-        latest["rsi"] >= 50
+        latest["rsi"] >= 70
         and latest["open"] > latest["close"]
         and latest["close"] > latest["vwap_upper"]
     )
