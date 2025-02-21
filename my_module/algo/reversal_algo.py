@@ -8,6 +8,7 @@ from tabulate import tabulate
 
 from my_module.indicators import Indicators
 from my_module.logger import Logger
+from my_module.order import place_bracket_order
 from my_module.trade_input import WATCH_STOCK
 from my_module.utils.candle_stick_chart import create_candle_chart
 from my_module.utils.speak import Speak

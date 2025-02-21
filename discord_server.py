@@ -10,7 +10,7 @@ from ib_insync import IB, Stock
 from pydantic import BaseModel
 
 from my_module.connect import connect_ib
-from my_module.order import place_order
+from my_module.order import place_bracket_order
 
 # Load environment variables
 load_dotenv()
@@ -93,8 +93,8 @@ async def on_message(message):
     trade_match = re.match(trade_pattern, msg)
 
     if trade_match:
-        direction = trade_match.group(1)
-        symbol = trade_match.group(2)
+        direction = trade_match.group(1).upper()
+        symbol = trade_match.group(2).upper()
         quantity = int(trade_match.group(3))
         entry = float(trade_match.group(4))
         take_profit = float(trade_match.group(5))
@@ -103,10 +103,10 @@ async def on_message(message):
         print(
             f"Trade order received: {direction} {symbol} {quantity} {entry} {take_profit} {stop_loss}"
         )
-        if direction == "long" and (take_profit < entry or stop_loss > entry):
+        if direction == "LONG" and (take_profit < entry or stop_loss > entry):
             await message.channel.send("Invalid trade parameters! 🛑")
             return
-        elif direction == "short" and (take_profit > entry or stop_loss < entry):
+        elif direction == "SHORT" and (take_profit > entry or stop_loss < entry):
             await message.channel.send("Invalid trade parameters! 🛑")
             return
 
@@ -134,31 +134,18 @@ async def on_message(message):
             confirmation = await bot.wait_for("message", check=check, timeout=60)
             if confirmation.content.lower() == "yes":
                 await message.channel.send("Trade confirmed!🚀\nExecuting... ")
-                stock = Stock(symbol, "SMART", "USD")
-                place_order(
+
+                contract = Stock(symbol, "SMART", "USD")
+                place_bracket_order(
                     ib,
-                    stock,
-                    "BUY" if direction == "long" else "SELL",
+                    contract,
+                    "BUY" if direction == "LONG" else "SELL",
                     quantity,
-                    "LIMIT",
                     entry,
-                )
-                place_order(
-                    ib,
-                    stock,
-                    "SELL" if direction == "long" else "BUY",
-                    quantity,
-                    "LIMIT",
                     take_profit,
-                )
-                place_order(
-                    ib,
-                    stock,
-                    "SELL" if direction == "long" else "BUY",
-                    quantity,
-                    "STOP",
                     stop_loss,
                 )
+
                 await message.channel.send("Trade executed! ✅")
             else:
                 await message.channel.send("Trade cancelled! ❌")
