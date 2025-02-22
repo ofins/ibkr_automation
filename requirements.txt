@@ -6,3 +6,5 @@ discord
 fastapi
 python-dotenv
 asyncio
+pytz
+

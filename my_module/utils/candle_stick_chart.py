@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 
-import pandas as pd
 import plotly.graph_objects as go
+import pytz
 
 
 async def create_candle_chart(df):
@@ -57,10 +57,10 @@ async def create_candle_chart(df):
     #     xaxis_rangeslider_visible=False,
     # )
 
-    date_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    folder_path = "dist/images"
-    file_path = os.path.join(folder_path, f"{date_time}.png")
-    file_path = file_path.replace("\\", "/")
+    ny_timezone = pytz.timezone("America/New_York")
+    date_time = datetime.now(ny_timezone).strftime("%Y-%m-%d_%H-%M-%S")
+    file_path = os.path.join(
+        "dis/images", f"{date_time}.png").replace("\\", "/")
     fig.write_image(file_path)
 
     # fig.show()
