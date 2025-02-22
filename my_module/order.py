@@ -1,6 +1,10 @@
 from typing import Union
 
-from ib_insync import IB, LimitOrder, MarketOrder, Stock
+from ib_insync import IB, LimitOrder, MarketOrder, Stock, StopOrder
+
+from my_module.logger import Logger
+
+logger = Logger.get_logger()
 
 
 def place_order(
@@ -25,8 +29,25 @@ def place_order(
     """
     if order_type.upper() == "LIMIT" and price is not None:
         order = LimitOrder(action, quantity, price)
+    elif order_type.upper() == "STOP":
+        order = StopOrder(action, quantity, price)
     else:
         order = MarketOrder(action, quantity)
 
     trade = ib.placeOrder(contract, order)
     return trade
+
+
+def place_bracket_order(
+    ib: IB,
+    contract: Stock,
+    action: str,
+    quantity: int,
+    entry_price: float,
+    take_profit: float,
+    stop_loss: float,
+):
+    bracket = ib.bracketOrder(action, quantity, entry_price, take_profit, stop_loss)
+    for o in bracket:
+        ib.placeOrder(contract, o)
+    return bracket
