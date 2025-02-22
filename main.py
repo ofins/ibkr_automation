@@ -1,7 +1,5 @@
 import asyncio
 
-from ib_insync import IB
-
 from my_module.logger import Logger
 from my_module.trading_app import TradingApp
 

@@ -60,7 +60,7 @@ async def create_candle_chart(df):
     ny_timezone = pytz.timezone("America/New_York")
     date_time = datetime.now(ny_timezone).strftime("%Y-%m-%d_%H-%M-%S")
     file_path = os.path.join(
-        "dis/images", f"{date_time}.png").replace("\\", "/")
+        "dist/images", f"{date_time}.png").replace("\\", "/")
     fig.write_image(file_path)
 
     # fig.show()

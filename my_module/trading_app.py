@@ -1,7 +1,5 @@
 import asyncio
-import subprocess
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
 from enum import Enum, auto
 from typing import Any, Callable, Coroutine, Dict, Optional, Union
 
@@ -26,8 +24,8 @@ logger = Logger.get_logger()
 
 
 class MenuOption(Enum):
-    CLOSE_TRADES = auto()
-    FETCH_TRADES = auto()
+    CLOSE_TRADES = auto()  # Close all traders / orders at a specific time
+    FETCH_TRADES = auto()  # Generate trade report
     SCALE_IN_ALGO = auto()  # place orders / monitor stop
     REVERSAL_ALGO = auto()  # detect trend reversal
     EXIT = auto()
@@ -78,11 +76,11 @@ class TradingApp:
 
             result = await timer_task
             if result:
-                logger.info("Timer finished. Proceed to close all positions...")
+                logger.info(
+                    "Timer finished. Proceed to close all positions...")
                 await close_all_positions(self.ib)
 
             await self.fetch_trades()
-            # subprocess.run("taskkill /F /IM code.exe", shell=True)  # close vs code
         except Exception as e:
             logger.error(f"Error in close trades operation: {str(e)}")
 
