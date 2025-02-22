@@ -17,6 +17,7 @@ from my_module.logger import Logger
 from my_module.plot import generate_html
 from my_module.timer import timer
 from my_module.util import get_exit_time
+from my_module.utils.arg_parser import args
 
 nest_asyncio.apply()
 
@@ -62,7 +63,7 @@ class TradingApp:
             print(f"{key}. {choice.description}")
 
         try:
-            user_input = input("\nEnter your choice: ").strip()
+            user_input = args.menu or input("\nEnter your choice: ").strip()
             return self.MENU_CHOICES[user_input].option
         except KeyError:
             if user_input:
