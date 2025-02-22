@@ -57,26 +57,45 @@ def fetch_historical_data(ib, contract):
         df, open_price, "up" if df["close"].iloc[-1] > open_price else "down"
     )
 
-    columns_to_display = [
-        "time",
-        "close",
-        "vwap",
-        "vwap_upper",
-        "vwap_lower",
-        "rsi",
-    ]
+    # columns_to_display = [
+    #     "time",
+    #     "close",
+    #     "vwap",
+    #     "vwap_upper",
+    #     "vwap_lower",
+    #     "rsi",
+    # ]
 
-    logger.info(
-        "\n"
-        + tabulate(
-            df[columns_to_display],
-            headers="keys",
-            tablefmt="fancy_grid",
-            showindex=False,
-        )
-    )
+    # logger.info(
+    #     "\n"
+    #     + tabulate(
+    #         df[columns_to_display],
+    #         headers="keys",
+    #         tablefmt="fancy_grid",
+    #         showindex=False,
+    #     )
+    # )
 
     return df
+
+
+def calculate_suggested_price_levels(df, reversal_up):
+    latest = df.iloc[-1]
+    high_of_day = latest["high_of_day"]
+    low_of_day = latest["low_of_day"]
+    range = high_of_day - low_of_day
+
+    suggested_entry = (
+        low_of_day + range * 0.1 if reversal_up else high_of_day - range * 0.1
+    )
+
+    suggested_profit_target = (high_of_day + low_of_day) / 2
+
+    suggested_stop = (
+        suggested_entry - range / 4 if reversal_up else suggested_entry + range / 4
+    )
+
+    return suggested_entry, suggested_profit_target, suggested_stop
 
 
 async def check_alerts(df):
@@ -97,7 +116,16 @@ async def check_alerts(df):
     )
 
     if reversal_up or reversal_down:
-        image_path = await create_candle_chart(df)
+        suggested_entry, suggested_profit_target, suggested_stop = (
+            calculate_suggested_price_levels(df, reversal_up)
+        )
+
+        image_path = await create_candle_chart(
+            df,
+            entry_price=suggested_entry,
+            stop_price=suggested_stop,
+            exit_price=suggested_profit_target,
+        )
         alert_content = (
             f"📢 Trading Alert\n"
             f"📈 Symbol: {WATCH_STOCK}\n"
@@ -105,19 +133,20 @@ async def check_alerts(df):
             f"💰 Price: ${latest['close']:.2f}\n"
             f"📊 RSI: {latest['rsi']:.2f}\n"
             f"🔵 VWAP: {latest['vwap']:.2f}\n"
-            f"🔺 Upper: {latest['vwap_upper']:.2f}\n"
-            f"🔻 Lower: {latest['vwap_lower']:.2f}\n"
-            f"{'🔼 Upward Reversal!' if reversal_up else '🔽 Downward Reversal!'}"
+            f"🔺 Upper VWAP: {latest['vwap_upper']:.2f}\n"
+            f"🔻 Lower VWAP: {latest['vwap_lower']:.2f}\n\n"
+            f"{'🔼 Upward Reversal!\n' if reversal_up else '🔽 Downward Reversal!'}"
         )
 
-        requests.post("http://localhost:8000/send-message", json={
-            "content": alert_content,
-            "image_path": image_path
-        })
+        requests.post(
+            "http://localhost:8000/send-message",
+            json={"content": alert_content, "image_path": image_path},
+        )
 
         direction = "UPWARD" if reversal_up else "DOWNWARD"
         logger.info(
-            f"\n{direction} REVERSAL ALERT: {latest['time']} - ${latest['close']:.2f}")
+            f"\n{direction} REVERSAL ALERT: {latest['time']} - ${latest['close']:.2f}"
+        )
         speak.say(f"{direction.lower()} reversal alert!")
 
 
