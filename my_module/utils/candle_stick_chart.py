@@ -4,10 +4,8 @@ from datetime import datetime, time
 import plotly.graph_objects as go
 import pytz
 
-from my_module.utils.arg_parser import args
 
-
-async def create_candle_chart(df, entry_price=None, stop_price=None, exit_price=None):
+def create_candle_chart(df, title, entry_price=None, stop_price=None, exit_price=None):
     fig = go.Figure(
         data=[
             go.Candlestick(
@@ -130,7 +128,7 @@ async def create_candle_chart(df, entry_price=None, stop_price=None, exit_price=
         )
 
     fig.update_layout(
-        title=f"{args.symbol} | 3 min candles",
+        title=f"{title} | 3 min candles",
         xaxis_title="Time",
         yaxis_title="Price",
         xaxis_rangeslider_visible=False,
@@ -152,7 +150,9 @@ async def create_candle_chart(df, entry_price=None, stop_price=None, exit_price=
 
     ny_timezone = pytz.timezone("America/New_York")
     date_time = datetime.now(ny_timezone).strftime("%Y-%m-%d_%H-%M-%S")
-    file_path = os.path.join("dist/images", f"{date_time}.png").replace("\\", "/")
+    file_path = os.path.join("dist/images", f"{title}_{date_time}.png").replace(
+        "\\", "/"
+    )
     fig.write_image(file_path)
 
     # fig.show()

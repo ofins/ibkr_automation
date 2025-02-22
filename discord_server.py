@@ -1,10 +1,10 @@
-import uvicorn
 import asyncio
 import os
 import re
 from typing import Optional
 
 import discord
+import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from ib_insync import IB, Stock
@@ -58,12 +58,10 @@ async def send_message(message: Message):
         channel = bot_instance.get_channel(CHANNEL_ID)
         if not channel:
             raise HTTPException(status_code=404, detail="Channel not found")
-        print(message.image_path)
         if message.image_path:
             # Check if the image exists at the given path
             if not os.path.exists(message.image_path):
-                raise HTTPException(
-                    status_code=404, detail="Image file not found")
+                raise HTTPException(status_code=404, detail="Image file not found")
 
             # Send the message with the image file
             await channel.send(message.content, file=discord.File(message.image_path))

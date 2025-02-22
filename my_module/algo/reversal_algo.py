@@ -1,3 +1,6 @@
+import asyncio
+
+import aiohttp
 import pandas as pd
 import requests
 from ib_insync import *
@@ -98,19 +101,31 @@ def calculate_suggested_price_levels(df, reversal_up):
     return suggested_entry, suggested_profit_target, suggested_stop
 
 
-async def check_alerts(df):
+async def send_alert(alert_content, image_path):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "http://localhost:8000/send-message",
+            json={"content": alert_content, "image_path": image_path},
+        ) as response:
+            return await response.text()
+
+
+async def check_alerts(ib, contract):
+
+    df = fetch_historical_data(ib, contract)
     if len(df) < 1:
         return
     latest = df.iloc[-1]
 
     reversal_up = bool(
-        latest["rsi"] <= 50
+        latest["rsi"] >= 70
         and latest["open"] < latest["close"]
         and latest["close"] < latest["vwap_lower"]
     )
+    # reversal_up = True
 
     reversal_down = bool(
-        latest["rsi"] >= 50
+        latest["rsi"] <= 30
         and latest["open"] > latest["close"]
         and latest["close"] > latest["vwap_upper"]
     )
@@ -119,16 +134,18 @@ async def check_alerts(df):
         suggested_entry, suggested_profit_target, suggested_stop = (
             calculate_suggested_price_levels(df, reversal_up)
         )
-
-        image_path = await create_candle_chart(
+        image_path = await asyncio.to_thread(
+            create_candle_chart,
             df,
-            entry_price=suggested_entry,
-            stop_price=suggested_stop,
-            exit_price=suggested_profit_target,
+            contract.symbol,
+            suggested_entry,
+            suggested_stop,
+            suggested_profit_target,
         )
+
         alert_content = (
             f"📢 Trading Alert\n"
-            f"📈 Symbol: {WATCH_STOCK}\n"
+            f"📈 Symbol: {contract.symbol}\n"
             f"📅 Time: {latest['time']}\n"
             f"💰 Price: ${latest['close']:.2f}\n"
             f"📊 RSI: {latest['rsi']:.2f}\n"
@@ -137,11 +154,7 @@ async def check_alerts(df):
             f"🔻 Lower VWAP: {latest['vwap_lower']:.2f}\n\n"
             f"{'🔼 Upward Reversal!\n' if reversal_up else '🔽 Downward Reversal!'}"
         )
-
-        requests.post(
-            "http://localhost:8000/send-message",
-            json={"content": alert_content, "image_path": image_path},
-        )
+        await send_alert(alert_content, image_path)
 
         direction = "UPWARD" if reversal_up else "DOWNWARD"
         logger.info(
@@ -160,8 +173,17 @@ class ReversalAlgo:
         try:
             self.is_running = True
             while self.is_running:
-                data = fetch_historical_data(self.ib, self.contract)
-                await check_alerts(data)
+                contracts = [
+                    Stock("AAPL", "SMART", "USD"),
+                    Stock("META", "SMART", "USD"),
+                    Stock("AMD", "SMART", "USD"),
+                    Stock("MU", "SMART", "USD"),
+                ]
+                tasks = [
+                    asyncio.create_task(check_alerts(self.ib, contract))
+                    for contract in contracts
+                ]
+                await asyncio.gather(*tasks)
                 self.ib.sleep(60 * 3)
         except KeyboardInterrupt:
             self.is_running = False
