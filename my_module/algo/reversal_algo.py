@@ -1,6 +1,3 @@
-import asyncio
-
-import numpy as np
 import pandas as pd
 import requests
 from ib_insync import *
@@ -9,50 +6,14 @@ from tabulate import tabulate
 from my_module.indicators import Indicators
 from my_module.logger import Logger
 from my_module.trade_input import WATCH_STOCK
+from my_module.utils.candle_stick_chart import create_candle_chart
 from my_module.utils.speak import Speak
 
 logger = Logger.get_logger()
 speak = Speak()
 
-url = "http://localhost:8000/send-message"
-
-columns = [
-    "time",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-    "vwap",
-    "std_dev",
-    "vwap_upper",
-    "vwap_lower",
-    "price_extension",
-    "high_of_day",
-    "low_of_day",
-    "volume_ma",
-    "volume_trend",
-    "extended_up",
-    "extended_down",
-    "breakout_up",
-    "breakout_down",
-    "new_high",
-    "new_low",
-    "trend_up",
-    "trend_down",
-    "rsi",
-    "consolidating",
-    "reversal_up",
-    "reversal_down",
-    "retrace_percentage",
-]
-
-df = pd.DataFrame(columns=columns)
-
 
 def fetch_historical_data(ib, contract):
-    global df
-
     bars = ib.reqHistoricalData(
         contract,
         endDateTime="",
@@ -63,42 +24,19 @@ def fetch_historical_data(ib, contract):
         formatDate=1,
     )
 
-    new_data = [
-        {
-            "time": bar.date,
-            "open": bar.open,
-            "high": bar.high,
-            "low": bar.low,
-            "close": bar.close,
-            "volume": bar.volume,
-            "vwap": 0,
-            "std_dev": 0,
-            "vwap_upper": 0,
-            "vwap_lower": 0,
-            "price_extension": 0,
-            "high_of_day": 0,
-            "low_of_day": 0,
-            "volume_ma": 0,
-            "volume_trend": 0,
-            "extended_up": 0,
-            "extended_down": 0,
-            "breakout_up": 0,
-            "breakout_down": 0,
-            "new_high": 0,
-            "new_low": 0,
-            "trend_up": False,
-            "trend_down": False,
-            "rsi": 0,
-            "consolidating": 0,
-            "reversal_up": False,
-            "reversal_down": False,
-            "retrace_percentage": 0,
-            "retrace_level": 0,
-        }
-        for bar in bars
-    ]
-
-    df = pd.DataFrame(new_data)
+    df = pd.DataFrame(
+        [
+            {
+                "time": bar.date,
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
+                "volume": bar.volume,
+            }
+            for bar in bars
+        ]
+    )
 
     open_price = df.iloc[0]["open"]
 
@@ -142,27 +80,10 @@ def fetch_historical_data(ib, contract):
 
 
 async def check_alerts(df):
-    logger.info("\nChecking for signals...")
     if len(df) < 1:
         return
     latest = df.iloc[-1]
-    logger.info(latest)
 
-    data = {
-        "content": f"""
->>> 📢 **Trading Alert**
-
-📈 **Symbol:** {WATCH_STOCK}  
-📅 **Time:** {latest['time']}  
-💰 **Price:** ${latest['close']:.2f}  
-📊 **RSI:** {latest['rsi']:.2f}  
-🔵 **VWAP:** {latest['vwap']:.2f}  
-🔺 **Upper VWAP:** {latest['vwap_upper']:.2f}  
-🔻 **Lower VWAP:** {latest['vwap_lower']:.2f}
-        """
-    }
-
-    # requests.post(url, json=data)
     reversal_up = bool(
         latest["rsi"] <= 50
         and latest["open"] < latest["close"]
@@ -175,20 +96,29 @@ async def check_alerts(df):
         and latest["close"] > latest["vwap_upper"]
     )
 
-    if reversal_up:
-        logger.info("\nUPWARD REVERSAL ALERT 🔼")
-        logger.info(f"Time: {latest['time']}")
-        logger.info(f"Price: ${latest['close']:.2f}")
-        speak.say("Upward reversal alert")
-        data["content"] += "\n🔼 **Upward Reversal Detected!**"
-        requests.post(url, json=data)
-    if reversal_down:
-        logger.info("\nDOWNWARD REVERSAL ALERT 🔽")
-        logger.info(f"Time: {latest['time']}")
-        logger.info(f"Price: ${latest['close']:.2f}")
-        speak.say("Downward reversal alert")
-        data["content"] += "\n🔽 **Downward Reversal Detected!**"
-        requests.post(url, json=data)
+    if reversal_up or reversal_down:
+        image_path = await create_candle_chart(df)
+        alert_content = (
+            f"📢 Trading Alert\n"
+            f"📈 Symbol: {WATCH_STOCK}\n"
+            f"📅 Time: {latest['time']}\n"
+            f"💰 Price: ${latest['close']:.2f}\n"
+            f"📊 RSI: {latest['rsi']:.2f}\n"
+            f"🔵 VWAP: {latest['vwap']:.2f}\n"
+            f"🔺 Upper: {latest['vwap_upper']:.2f}\n"
+            f"🔻 Lower: {latest['vwap_lower']:.2f}\n"
+            f"{'🔼 Upward Reversal!' if reversal_up else '🔽 Downward Reversal!'}"
+        )
+
+        requests.post("http://localhost:8000/send-message", json={
+            "content": alert_content,
+            "image_path": image_path
+        })
+
+        direction = "UPWARD" if reversal_up else "DOWNWARD"
+        logger.info(
+            f"\n{direction} REVERSAL ALERT: {latest['time']} - ${latest['close']:.2f}")
+        speak.say(f"{direction.lower()} reversal alert!")
 
 
 class ReversalAlgo:
