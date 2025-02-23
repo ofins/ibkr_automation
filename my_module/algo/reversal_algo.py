@@ -116,17 +116,19 @@ async def check_alerts(ib, contract):
     if len(df) < 1:
         return
     latest = df.iloc[-1]
+    logger.info(contract.symbol)
+    logger.info(latest)
 
     reversal_up = bool(
-        latest["rsi"] >= 70
-        and latest["open"] < latest["close"]
+        latest["rsi"] <= 30
+        and latest["open"] > latest["close"]
         and latest["close"] < latest["vwap_lower"]
     )
     # reversal_up = True
 
     reversal_down = bool(
-        latest["rsi"] <= 30
-        and latest["open"] > latest["close"]
+        latest["rsi"] >= 70
+        and latest["open"] < latest["close"]
         and latest["close"] > latest["vwap_upper"]
     )
 
@@ -178,13 +180,17 @@ class ReversalAlgo:
                     Stock("META", "SMART", "USD"),
                     Stock("AMD", "SMART", "USD"),
                     Stock("MU", "SMART", "USD"),
+                    Stock("JPM", "SMART", "USD"),
+                    Stock("TSLA", "SMART", "USD"),
+                    Stock("SPY", "SMART", "USD"),
                 ]
                 tasks = [
                     asyncio.create_task(check_alerts(self.ib, contract))
                     for contract in contracts
                 ]
                 await asyncio.gather(*tasks)
-                self.ib.sleep(60 * 3)
+                logger.info("checked...")
+                self.ib.sleep(180)
         except KeyboardInterrupt:
             self.is_running = False
             raise
