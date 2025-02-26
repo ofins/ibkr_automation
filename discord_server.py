@@ -94,6 +94,7 @@ async def on_message(message):
         r"!p\s+(long|short)\s+(\w+)\s+(\d+)\s+([\d.]+)/([\d.]+)/([\d.]+)": handle_trade_command,
         r"^!p\s+start": handle_start_command,
         r"^!p\s+stop": handle_stop_command,
+        r"^!p\s+pos": handle_position_command,
     }
 
     for pattern, handler in handlers.items():
@@ -107,7 +108,7 @@ async def on_order_status(trade):
     status = trade.orderStatus.status
     logger.info(f"Order status: {status}")
     if status == "Filled":
-        fill_msg = f"Order filled: {trade.order.action} {trade.order.totalQuantity} {trade.contract.symbol} @ {trade.orderStatus.avgFillPrice}"
+        fill_msg = f"✔️ Order filled: {trade.order.action} {trade.order.totalQuantity} {trade.contract.symbol} @ {trade.orderStatus.avgFillPrice}"
         logger.info(fill_msg)
         await send_message(fill_msg)
 
@@ -171,6 +172,19 @@ async def handle_trade_command(message, match):
             await message.channel.send("Trade cancelled! ❌")
     except asyncio.TimeoutError:
         await message.channel.send("Trade confirmation timed out! ⏰")
+
+
+async def handle_position_command(message, match=None):
+    positions = ib.positions()
+    if not positions:
+        await message.channel.send("No open positions!")
+        return
+
+    positions_lines = [
+        f"{pos.contract.symbol}: Positions: {pos.position}, AvgCost: {pos.avgCost}"
+        for pos in positions
+    ]
+    await message.channel.send(">>> 📊 Open Positions:\n" + "\n".join(positions_lines))
 
 
 if __name__ == "__main__":

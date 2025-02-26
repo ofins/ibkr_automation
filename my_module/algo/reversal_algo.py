@@ -166,10 +166,9 @@ async def check_alerts(ib, contract):
 
 
 class ReversalAlgo:
-    def __init__(self, ib, contract):
+    def __init__(self, ib):
         self.ib = ib
         self.is_running = False
-        self.contract = contract
 
     async def run(self):
         try:

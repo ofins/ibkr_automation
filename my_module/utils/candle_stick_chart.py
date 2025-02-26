@@ -104,7 +104,7 @@ def create_candle_chart(df, title, entry_price=None, stop_price=None, exit_price
             line=dict(color="orange", width=1),
             name="RSI",
             yaxis="y2",  # Assign to secondary y-axis
-            opacity=0.5,
+            opacity=1,
         )
     )
 
