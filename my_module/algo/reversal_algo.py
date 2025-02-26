@@ -117,7 +117,7 @@ async def check_alerts(ib, contract):
         return
     latest = df.iloc[-1]
     logger.info(contract.symbol)
-    logger.info(latest)
+    # logger.info(latest)
 
     reversal_up = bool(
         latest["rsi"] <= 30
@@ -175,6 +175,11 @@ class ReversalAlgo:
         try:
             self.is_running = True
             while self.is_running:
+                active_positions = []
+                positions = self.ib.positions()
+                for pos in positions:
+                    active_positions.append(pos.contract.symbol.upper())
+
                 contracts = [
                     Stock("AAPL", "SMART", "USD"),
                     Stock("META", "SMART", "USD"),
@@ -187,6 +192,7 @@ class ReversalAlgo:
                 tasks = [
                     asyncio.create_task(check_alerts(self.ib, contract))
                     for contract in contracts
+                    if contract.symbol not in active_positions
                 ]
                 await asyncio.gather(*tasks)
                 logger.info("checked...")
