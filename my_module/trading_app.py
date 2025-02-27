@@ -15,7 +15,7 @@ from my_module.data import Data
 from my_module.instance import Instance
 from my_module.logger import Logger
 from my_module.plot import generate_html
-from my_module.timer import timer
+from my_module.timer import close_trades_timer, timer
 from my_module.util import get_exit_time
 from my_module.utils.arg_parser import args
 
@@ -71,18 +71,8 @@ class TradingApp:
             return None
 
     async def close_trades(self) -> None:
-        try:
-            exit_time = get_exit_time()
-            timer_task = timer(exit_time)
-
-            result = await timer_task
-            if result:
-                logger.info("Timer finished. Proceed to close all positions...")
-                await close_all_positions(self.ib)
-
-            await self.fetch_trades()
-        except Exception as e:
-            logger.error(f"Error in close trades operation: {str(e)}")
+        await close_trades_timer(self.ib)
+        await self.fetch_trades()
 
     async def fetch_trades(self) -> None:
         try:

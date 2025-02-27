@@ -1,11 +1,16 @@
 import os
 from datetime import datetime, time
 
+import pandas as pd
 import plotly.graph_objects as go
 import pytz
 
 
 def create_candle_chart(df, title, entry_price=None, stop_price=None, exit_price=None):
+    df["time"] = pd.to_datetime(df["time"])
+    today_date = df["time"].iloc[-1].date()
+    df = df[df["time"].dt.date == today_date]
+
     fig = go.Figure(
         data=[
             go.Candlestick(

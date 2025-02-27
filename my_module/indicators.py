@@ -10,22 +10,21 @@ class Indicators:
     @staticmethod
     def calculate_rsi(df, periods=14):
         delta = df["close"].diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
+        gain, loss = delta.copy(), delta.copy()
+        gain[gain < 0] = 0
+        loss[loss > 0] = 0
+        loss = -loss
 
-        avg_gain = gain.rolling(window=periods).mean()
-        avg_loss = loss.rolling(window=periods).mean()
+        def rma(x, n):
+            alpha = 1 / n
+            return x.ewm(alpha=alpha, adjust=False).mean()  # ✅ Fix: Add parentheses
 
-        gain_std = gain.rolling(window=periods).std()
-        loss_std = loss.rolling(window=periods).std()
+        avg_gain = rma(gain, periods)  # ✅ Now returns actual values
+        avg_loss = rma(loss, periods)
 
-        avg_gain_bb = avg_gain + (gain_std)
-        avg_loss_bb = avg_loss + (loss_std)
-
-        rs = avg_gain_bb / avg_loss_bb
-
-        # rs = avg_gain / avg_loss
+        rs = avg_gain / avg_loss  # ✅ Now dividing numbers, not methods
         rsi = 100 - (100 / (1 + rs))
+
         return rsi
 
     @staticmethod

@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import aiohttp
 import pandas as pd
@@ -6,9 +8,12 @@ import requests
 from ib_insync import *
 from tabulate import tabulate
 
+from my_module.close_all_positions import close_all_positions
+from my_module.connect import connect_ib
 from my_module.indicators import Indicators
 from my_module.logger import Logger
-from my_module.trade_input import WATCH_STOCK
+from my_module.order import place_bracket_order
+from my_module.util import get_exit_time
 from my_module.utils.candle_stick_chart import create_candle_chart
 from my_module.utils.speak import Speak
 
@@ -19,8 +24,9 @@ speak = Speak()
 def fetch_historical_data(ib, contract):
     bars = ib.reqHistoricalData(
         contract,
+        # endDateTime="20250226 05:00:00",
         endDateTime="",
-        durationStr="1 D",
+        durationStr="2 D",
         barSizeSetting="3 mins",
         whatToShow="TRADES",
         useRTH=True,
@@ -111,26 +117,18 @@ async def send_alert(alert_content, image_path):
 
 
 async def check_alerts(ib, contract):
-
     df = fetch_historical_data(ib, contract)
     if len(df) < 1:
         return
+    prev = df.iloc[-2]
     latest = df.iloc[-1]
     logger.info(contract.symbol)
     # logger.info(latest)
 
-    reversal_up = bool(
-        latest["rsi"] <= 30
-        and latest["open"] > latest["close"]
-        and latest["close"] < latest["vwap_lower"]
-    )
+    reversal_up = bool(latest["rsi"] < 30 and prev["rsi"] > 30)
     # reversal_up = True
 
-    reversal_down = bool(
-        latest["rsi"] >= 70
-        and latest["open"] < latest["close"]
-        and latest["close"] > latest["vwap_upper"]
-    )
+    reversal_down = bool(latest["rsi"] < 70 and prev["rsi"] > 70)
 
     if reversal_up or reversal_down:
         suggested_entry, suggested_profit_target, suggested_stop = (
@@ -157,12 +155,21 @@ async def check_alerts(ib, contract):
             f"{'🔼 Upward Reversal!\n' if reversal_up else '🔽 Downward Reversal!'}"
         )
         await send_alert(alert_content, image_path)
+        place_bracket_order(
+            ib,
+            contract,
+            "BUY" if reversal_up else "SELL",
+            50,
+            suggested_entry.round(2),
+            suggested_profit_target.round(2),
+            suggested_stop.round(2),
+        )
 
         direction = "UPWARD" if reversal_up else "DOWNWARD"
         logger.info(
             f"\n{direction} REVERSAL ALERT: {latest['time']} - ${latest['close']:.2f}"
         )
-        speak.say(f"{direction.lower()} reversal alert!")
+        speak.say(f"{direction.lower()} reversal")
 
 
 class ReversalAlgo:
@@ -174,6 +181,15 @@ class ReversalAlgo:
         try:
             self.is_running = True
             while self.is_running:
+                # Close all pos and orders after designated time
+                exit_time = get_exit_time()
+                est_time = ZoneInfo("America/New_York")
+                if datetime.now(est_time).time() > exit_time:
+                    await close_all_positions(self.ib)
+                    self.is_running = False
+                    raise KeyboardInterrupt
+
+                # Do not check alerts for active position stocks
                 active_positions = []
                 positions = self.ib.positions()
                 for pos in positions:
@@ -194,10 +210,19 @@ class ReversalAlgo:
                     if contract.symbol not in active_positions
                 ]
                 await asyncio.gather(*tasks)
-                logger.info("checked...")
+                logger.info("=============================")
+
                 self.ib.sleep(180)
         except KeyboardInterrupt:
             self.is_running = False
             raise
         finally:
             self.is_running = False
+
+
+# Testing
+if __name__ == "__main__":
+    ib = IB()
+    asyncio.create_task(connect_ib(ib))
+    stock = Stock("AAPL", "SMART", "USD")
+    asyncio.create_task(check_alerts(ib, stock))

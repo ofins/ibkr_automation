@@ -72,6 +72,7 @@ async def send_message(message: Message):
         # Send the message with the image file
         await channel.send(message.content, file=discord.File(message.image_path))
         # If no image, send the message only
+    else:
         await channel.send(message.content)
     return {"status": "Message sent successfully"}
 
