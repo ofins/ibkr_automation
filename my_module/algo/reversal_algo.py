@@ -29,6 +29,7 @@ class Config:
     HISTORICAL_DURATION: str = "2 D"
     BAR_SIZE: str = "3 mins"
     CHECK_INTERVAL_SECONDS: int = 180
+    CONTRACTS = ["AAPL", "META", "AMD", "MU", "JPM", "TSLA", "SPY"]
 
 
 class HistoricalDataFetcher:
@@ -176,13 +177,7 @@ class ReversalAlgo:
         self.config = config
         self.is_running = False
         self.contracts = [
-            Stock("AAPL", "SMART", "USD"),
-            Stock("META", "SMART", "USD"),
-            Stock("AMD", "SMART", "USD"),
-            # Stock("MU", "SMART", "USD"),
-            # Stock("JPM", "SMART", "USD"),
-            # Stock("TSLA", "SMART", "USD"),
-            # Stock("SPY", "SMART", "USD"),
+            Stock(symbol, "SMART", "USD") for symbol in self.config.CONTRACTS
         ]
 
     async def check_alerts(self, contract: Contract) -> None:
