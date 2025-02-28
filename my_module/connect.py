@@ -20,7 +20,7 @@ async def connect_ib(ib):
     random_number = random.randint(1, 10000)
     try:
         # 7497 IBKR TWS API / 4002 IB Gateway API
-        await ib.connectAsync("127.0.0.1", 4002, clientId=random_number)
+        await ib.connectAsync("127.0.0.1", 7497, clientId=random_number)
         logger.info(f"🟢 Connected to IBKR tws API")
         return 1
     except Exception as e:

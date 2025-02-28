@@ -17,12 +17,12 @@ class Indicators:
 
         def rma(x, n):
             alpha = 1 / n
-            return x.ewm(alpha=alpha, adjust=False).mean()  # ✅ Fix: Add parentheses
+            return x.ewm(alpha=alpha, adjust=False).mean()
 
-        avg_gain = rma(gain, periods)  # ✅ Now returns actual values
+        avg_gain = rma(gain, periods)
         avg_loss = rma(loss, periods)
 
-        rs = avg_gain / avg_loss  # ✅ Now dividing numbers, not methods
+        rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
 
         return rsi

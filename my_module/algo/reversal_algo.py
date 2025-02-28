@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -21,50 +22,72 @@ logger = Logger.get_logger()
 speak = Speak()
 
 
-def fetch_historical_data(ib, contract):
-    bars = ib.reqHistoricalData(
-        contract,
-        # endDateTime="20250226 05:00:00",
-        endDateTime="",
-        durationStr="2 D",
-        barSizeSetting="3 mins",
-        whatToShow="TRADES",
-        useRTH=True,
-        formatDate=1,
-    )
+@dataclass
+class Config:
+    """Configuration class for the reversal algo."""
 
-    df = pd.DataFrame(
-        [
-            {
-                "time": bar.date,
-                "open": bar.open,
-                "high": bar.high,
-                "low": bar.low,
-                "close": bar.close,
-                "volume": bar.volume,
-            }
-            for bar in bars
-        ]
-    )
+    HISTORICAL_DURATION: str = "2 D"
+    BAR_SIZE: str = "3 mins"
+    CHECK_INTERVAL_SECONDS: int = 180
 
-    open_price = df.iloc[0]["open"]
 
-    df["high_of_day"] = Indicators.high_of_day(df)
-    df["low_of_day"] = Indicators.low_of_day(df)
-    df["vwap"] = Indicators.vwap(df)
-    df["std_dev"] = Indicators.std_dev(df)
-    df["vwap_upper"] = Indicators.vwap_upper(df, df["std_dev"])
-    df["vwap_lower"] = Indicators.vwap_lower(df, df["std_dev"])
-    df["price_extension"] = Indicators.price_extension(df, open_price)
-    df["volume_ma"] = Indicators.volume_ma(df)
-    df["volume_trend"] = Indicators.volume_trend(df)
-    df["extended_up"] = Indicators.extended_up(df)
-    df["extended_down"] = Indicators.extended_down(df)
-    df["rsi"] = Indicators.calculate_rsi(df)
+class HistoricalDataFetcher:
+    """Handles fetching historical data for a given stock symbol."""
 
-    df["retrace_percentage"] = Indicators.retrace_percentage(
-        df, open_price, "up" if df["close"].iloc[-1] > open_price else "down"
-    )
+    @staticmethod
+    def fetch(ib: IB, contract: Contract, config: Config) -> pd.DataFrame:
+        bars = ib.reqHistoricalData(
+            contract,
+            # endDateTime="20250226 05:00:00",
+            endDateTime="",
+            durationStr="2 D",
+            barSizeSetting="3 mins",
+            whatToShow="TRADES",
+            useRTH=True,
+            formatDate=1,
+        )
+
+        df = pd.DataFrame(
+            [
+                {
+                    "time": bar.date,
+                    "open": bar.open,
+                    "high": bar.high,
+                    "low": bar.low,
+                    "close": bar.close,
+                    "volume": bar.volume,
+                }
+                for bar in bars
+            ]
+        )
+
+        return HistoricalDataFetcher._add_indicators(df)
+
+    @staticmethod
+    def _add_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Add technical indicators to the dataframe"""
+
+        open_price = df.iloc[0]["open"]
+
+        df["high_of_day"] = Indicators.high_of_day(df)
+        df["low_of_day"] = Indicators.low_of_day(df)
+        df["vwap"] = Indicators.vwap(df)
+        df["std_dev"] = Indicators.std_dev(df)
+        df["vwap_upper"] = Indicators.vwap_upper(df, df["std_dev"])
+        df["vwap_lower"] = Indicators.vwap_lower(df, df["std_dev"])
+        df["price_extension"] = Indicators.price_extension(df, open_price)
+        df["volume_ma"] = Indicators.volume_ma(df)
+        df["volume_trend"] = Indicators.volume_trend(df)
+        df["extended_up"] = Indicators.extended_up(df)
+        df["extended_down"] = Indicators.extended_down(df)
+        df["rsi"] = Indicators.calculate_rsi(df)
+        df["breakout_upper_vwap"] = Indicators.breakout_upper_vwap(df)
+        df["breakout_lower_vwap"] = Indicators.breakout_lower_vwap(df)
+        df["retrace_percentage"] = Indicators.retrace_percentage(
+            df, open_price, "up" if df["close"].iloc[-1] > open_price else "down"
+        )
+
+        return df
 
     # columns_to_display = [
     #     "time",
@@ -85,65 +108,55 @@ def fetch_historical_data(ib, contract):
     #     )
     # )
 
-    return df
 
+class PriceLevelCalculator:
+    """Calculates suggested price levels for a given stock symbol."""
 
-def calculate_suggested_price_levels(df, reversal_up):
-    latest = df.iloc[-1]
-    high_of_day = latest["high_of_day"]
-    low_of_day = latest["low_of_day"]
-    range = high_of_day - low_of_day
+    @staticmethod
+    def calculate(df: pd.DataFrame, reversal_up: bool):
+        latest = df.iloc[-1]
+        high_of_day = latest["high_of_day"]
+        low_of_day = latest["low_of_day"]
+        range = high_of_day - low_of_day
+        close = latest["close"]
 
-    suggested_entry = (
-        low_of_day + range * 0.1 if reversal_up else high_of_day - range * 0.1
-    )
-
-    suggested_profit_target = (high_of_day + low_of_day) / 2
-
-    suggested_stop = (
-        suggested_entry - range / 4 if reversal_up else suggested_entry + range / 4
-    )
-
-    return suggested_entry, suggested_profit_target, suggested_stop
-
-
-async def send_alert(alert_content, image_path):
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "http://localhost:8000/send-message",
-            json={"content": alert_content, "image_path": image_path},
-        ) as response:
-            return await response.text()
-
-
-async def check_alerts(ib, contract):
-    df = fetch_historical_data(ib, contract)
-    if len(df) < 1:
-        return
-    prev = df.iloc[-2]
-    latest = df.iloc[-1]
-    logger.info(contract.symbol)
-    # logger.info(latest)
-
-    reversal_up = bool(latest["rsi"] < 30 and prev["rsi"] > 30)
-    # reversal_up = True
-
-    reversal_down = bool(latest["rsi"] < 70 and prev["rsi"] > 70)
-
-    if reversal_up or reversal_down:
-        suggested_entry, suggested_profit_target, suggested_stop = (
-            calculate_suggested_price_levels(df, reversal_up)
+        suggested_entry = (
+            min(low_of_day + (range * 0.1), close)
+            if reversal_up
+            else max(high_of_day - (range * 0.1), close)
         )
-        image_path = await asyncio.to_thread(
-            create_candle_chart,
-            df,
-            contract.symbol,
-            suggested_entry,
-            suggested_stop,
-            suggested_profit_target,
+        suggested_profit_target = (high_of_day + low_of_day) / 2
+        suggested_stop = (
+            suggested_entry - range / 4 if reversal_up else suggested_entry + range / 4
         )
 
-        alert_content = (
+        return suggested_entry, suggested_profit_target, suggested_stop
+
+
+class AlertManager:
+    """Manages alerts for trend reversal."""
+
+    @staticmethod
+    async def send_alert(alert_content, image_path):
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "http://localhost:8000/send-message",
+                json={"content": alert_content, "image_path": image_path},
+            ) as response:
+                return await response.text()
+
+    @staticmethod
+    def create_alert_content(
+        contract: Contract,
+        latest: pd.Series,
+        reversal_up: bool,
+        entry: float,
+        profit_target: float,
+        stop: float,
+    ) -> str:
+        risk_reward = abs(profit_target - entry) / abs(stop - entry)
+
+        return (
             f"📢 Trading Alert\n"
             f"📈 Symbol: {contract.symbol}\n"
             f"📅 Time: {latest['time']}\n"
@@ -153,76 +166,126 @@ async def check_alerts(ib, contract):
             f"🔺 Upper VWAP: {latest['vwap_upper']:.2f}\n"
             f"🔻 Lower VWAP: {latest['vwap_lower']:.2f}\n\n"
             f"{'🔼 Upward Reversal!\n' if reversal_up else '🔽 Downward Reversal!'}"
+            f"⚖️ Risk Reward Ratio: {risk_reward:.2f}"
         )
-        await send_alert(alert_content, image_path)
-        place_bracket_order(
-            ib,
-            contract,
-            "BUY" if reversal_up else "SELL",
-            50,
-            suggested_entry.round(2),
-            suggested_profit_target.round(2),
-            suggested_stop.round(2),
-        )
-
-        direction = "UPWARD" if reversal_up else "DOWNWARD"
-        logger.info(
-            f"\n{direction} REVERSAL ALERT: {latest['time']} - ${latest['close']:.2f}"
-        )
-        speak.say(f"{direction.lower()} reversal")
 
 
 class ReversalAlgo:
-    def __init__(self, ib):
+    def __init__(self, ib: IB, config: Config = Config()):
         self.ib = ib
+        self.config = config
         self.is_running = False
+        self.contracts = [
+            Stock("AAPL", "SMART", "USD"),
+            Stock("META", "SMART", "USD"),
+            Stock("AMD", "SMART", "USD"),
+            # Stock("MU", "SMART", "USD"),
+            # Stock("JPM", "SMART", "USD"),
+            # Stock("TSLA", "SMART", "USD"),
+            # Stock("SPY", "SMART", "USD"),
+        ]
+
+    async def check_alerts(self, contract: Contract) -> None:
+        """Check for trading alerts for specific contract"""
+        try:
+            df = HistoricalDataFetcher.fetch(self.ib, contract, self.config)
+            if df.empty:
+                return
+
+            prev, last = df.iloc[-2], df.iloc[-1]
+            logger.info(f"{contract.symbol}")
+
+            reversal_up = (
+                last["rsi"] > 30 and prev["rsi"] < 30 and last["breakout_lower_vwap"]
+            )
+            reversal_up = True
+            reversal_down = (
+                last["rsi"] < 70 and prev["rsi"] > 70 and last["breakout_upper_vwap"]
+            )
+
+            if reversal_up or reversal_down:
+                await self.handle_reversal(contract, df, last, reversal_up)
+        except Exception as e:
+            logger.error(f"Error in checking alerts for {contract.symbol}: {str(e)}")
+
+    async def handle_reversal(
+        self, contract: Contract, df: pd.DataFrame, latest: pd.Series, reversal_up: bool
+    ) -> None:
+        """Handle a detected reversal"""
+        entry, profit_target, stop = PriceLevelCalculator.calculate(df, reversal_up)
+
+        image_path = await asyncio.to_thread(
+            create_candle_chart,
+            df,
+            contract.symbol,
+            entry,
+            stop,
+            profit_target,
+        )
+
+        alert_content = AlertManager.create_alert_content(
+            contract, latest, reversal_up, entry, profit_target, stop
+        )
+
+        place_bracket_order(
+            self.ib,
+            contract,
+            "BUY" if reversal_up else "SELL",
+            1,
+            entry,
+            profit_target,
+            stop,
+        )
+
+        direction = "UPWARD" if reversal_up else "DOWNWARD"
+        await AlertManager.send_alert(alert_content, image_path)
+        speak.say(f"{direction.lower()} reversal")
+        speak.say_letter_by_letter(contract.symbol)
 
     async def run(self):
+        """Main algo execution loop"""
         try:
             self.is_running = True
+            timezone = ZoneInfo("America/New_York")
+
             while self.is_running:
                 # Close all pos and orders after designated time
-                exit_time = get_exit_time()
-                est_time = ZoneInfo("America/New_York")
-                if datetime.now(est_time).time() > exit_time:
-                    await close_all_positions(self.ib)
-                    self.is_running = False
-                    raise KeyboardInterrupt
+                # if datetime.now(timezone).time() > get_exit_time():
+                #     await close_all_positions(self.ib)
+                #     raise KeyboardInterrupt
 
                 # Do not check alerts for active position stocks
-                active_positions = []
-                positions = self.ib.positions()
-                for pos in positions:
-                    active_positions.append(pos.contract.symbol.upper())
+                active_symbols = {
+                    pos.contract.symbol.upper() for pos in self.ib.positions()
+                }
 
-                contracts = [
-                    Stock("AAPL", "SMART", "USD"),
-                    Stock("META", "SMART", "USD"),
-                    Stock("AMD", "SMART", "USD"),
-                    Stock("MU", "SMART", "USD"),
-                    Stock("JPM", "SMART", "USD"),
-                    Stock("TSLA", "SMART", "USD"),
-                    Stock("SPY", "SMART", "USD"),
-                ]
                 tasks = [
-                    asyncio.create_task(check_alerts(self.ib, contract))
-                    for contract in contracts
-                    if contract.symbol not in active_positions
+                    self.check_alerts(contract)
+                    for contract in self.contracts
+                    if contract.symbol.upper() not in active_symbols
                 ]
+
                 await asyncio.gather(*tasks)
                 logger.info("=============================")
+                self.ib.sleep(self.config.CHECK_INTERVAL_SECONDS)
 
-                self.ib.sleep(180)
         except KeyboardInterrupt:
-            self.is_running = False
-            raise
+            logger.info("Received shutdown signal")
+        except Exception as e:
+            logger.error(f"Error in running reversal algo: {str(e)}")
         finally:
             self.is_running = False
 
 
+async def main():
+    """Application entry point"""
+    ib = IB()
+    await connect_ib(ib)
+
+    algo = ReversalAlgo(ib)
+    await algo.run()
+
+
 # Testing
 if __name__ == "__main__":
-    ib = IB()
-    asyncio.create_task(connect_ib(ib))
-    stock = Stock("AAPL", "SMART", "USD")
-    asyncio.create_task(check_alerts(ib, stock))
+    asyncio.run(main())
