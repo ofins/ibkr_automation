@@ -15,11 +15,11 @@ total_rewards = []
 
 for _ in range(attempts):
     # Simulate a win/loss (52% chance of win, 48% chance of loss)
-    if random.random() < 0.3:  # Win (52% chance)
+    if random.random() < 0.5:  # Win (52% chance)
         total_reward += reward * 3
         # reward = max(max_reward, reward + 5)
     else:  # Loss (48% chance)
-        total_reward -= reward
+        total_reward -= reward * 3
         # reward = min(min_reward, reward - 5)
 
     total_rewards.append(total_reward)

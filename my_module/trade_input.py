@@ -1,8 +1,4 @@
-import argparse
-
-parser = argparse.ArgumentParser(description="Trade Input")
-parser.add_argument("--symbol", type=str, help="Stock Symbol", default="AAPL")
-args = parser.parse_args()
+from my_module.utils.arg_parser import args
 
 # Reversal Algo
 WATCH_STOCK = args.symbol

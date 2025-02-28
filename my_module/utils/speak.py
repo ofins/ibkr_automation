@@ -21,5 +21,12 @@ class Speak:
         self.engine.setProperty("rate", speed)
 
     def say(self, text: str):
+        self.engine.setProperty("rate", 150)
         self.engine.say(text)
         self.engine.runAndWait()
+
+    def say_letter_by_letter(self, text: str):
+        self.engine.setProperty("rate", 300)
+        for letter in text:
+            self.engine.say(letter)
+            self.engine.runAndWait()

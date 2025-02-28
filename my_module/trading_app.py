@@ -1,7 +1,5 @@
 import asyncio
-import subprocess
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
 from enum import Enum, auto
 from typing import Any, Callable, Coroutine, Dict, Optional, Union
 
@@ -17,8 +15,9 @@ from my_module.data import Data
 from my_module.instance import Instance
 from my_module.logger import Logger
 from my_module.plot import generate_html
-from my_module.timer import timer
+from my_module.timer import close_trades_timer, timer
 from my_module.util import get_exit_time
+from my_module.utils.arg_parser import args
 
 nest_asyncio.apply()
 
@@ -26,8 +25,8 @@ logger = Logger.get_logger()
 
 
 class MenuOption(Enum):
-    CLOSE_TRADES = auto()
-    FETCH_TRADES = auto()
+    CLOSE_TRADES = auto()  # Close all traders / orders at a specific time
+    FETCH_TRADES = auto()  # Generate trade report
     SCALE_IN_ALGO = auto()  # place orders / monitor stop
     REVERSAL_ALGO = auto()  # detect trend reversal
     EXIT = auto()
@@ -64,7 +63,7 @@ class TradingApp:
             print(f"{key}. {choice.description}")
 
         try:
-            user_input = input("\nEnter your choice: ").strip()
+            user_input = args.menu or input("\nEnter your choice: ").strip()
             return self.MENU_CHOICES[user_input].option
         except KeyError:
             if user_input:
@@ -72,19 +71,8 @@ class TradingApp:
             return None
 
     async def close_trades(self) -> None:
-        try:
-            exit_time = get_exit_time()
-            timer_task = timer(exit_time)
-
-            result = await timer_task
-            if result:
-                logger.info("Timer finished. Proceed to close all positions...")
-                await close_all_positions(self.ib)
-
-            await self.fetch_trades()
-            # subprocess.run("taskkill /F /IM code.exe", shell=True)  # close vs code
-        except Exception as e:
-            logger.error(f"Error in close trades operation: {str(e)}")
+        await close_trades_timer(self.ib)
+        await self.fetch_trades()
 
     async def fetch_trades(self) -> None:
         try:
@@ -114,9 +102,8 @@ class TradingApp:
             logger.error(f"Error in running test algo: {str(e)}")
 
     async def run_reversal_algo(self) -> None:
-        stock = Stock(trade_input.WATCH_STOCK, "SMART", "USD")
         try:
-            reversal = ReversalAlgo(self.ib, stock)
+            reversal = ReversalAlgo(self.ib)
             await reversal.run()
         except Exception as e:
             logger.error(f"Error in running reversal algo: {str(e)}")
