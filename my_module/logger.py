@@ -1,16 +1,44 @@
+import os
+import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from loguru import logger
 
 
 class Logger:
-    _logger_initialized = False  # Track if the logger is already initialized
+    _logger = None  # Store the logger instance
 
     @staticmethod
     def get_logger():
-        if not Logger._logger_initialized:
-            # Remove default logger and configure a custom one
-            logger.remove()  # Remove default logger
+        if Logger._logger is None:
+            log_dir = "logs"
+            os.makedirs(log_dir, exist_ok=True)
+
+            timezone = ZoneInfo("America/New_York")
+            today = datetime.now(timezone).strftime("%Y-%m-%d")
+            log_file = f"{log_dir}/{today}.log"
+
+            # Remove default logger
+            logger.remove()
+
+            # Add file handler (all levels)
             logger.add(
-                sink=lambda msg: print(f"{msg}", end=""),  # Output to console
+                log_file,
+                rotation="00:00",
+                retention="7 days",
+                format=(
+                    "[{time:YYYY-MM-DD HH:mm:ss.SSS}] | "
+                    "{level: <8} | "
+                    "{message} | "
+                    "{file}:{line}"
+                ),
+                level="DEBUG",
+            )
+
+            # Add console handler (INFO and above)
+            logger.add(
+                sink=sys.stderr,  # Use built-in stderr sink
                 format=(
                     "<green>[{time:HH:mm:ss.SSS}]</green> | "
                     "<level>{level: <8}</level> | "
@@ -18,49 +46,30 @@ class Logger:
                     "<yellow>{file}:{line}</yellow>"
                 ),
                 colorize=True,
+                level="INFO",
             )
 
-            logger.add(
-                sink=lambda msg: print(f"{msg}", end=""),  # Output to console
-                format=(
-                    "<green>[{time:HH:mm:ss.SSS}]</green> | "
-                    "<level>{level: <8}</level> | "
-                    "<cyan>{message}</cyan> | "
-                    "<yellow>{file}:{line}</yellow>"
-                ),
-                colorize=True,
-                level="ERROR",  # Only for error messages
-            )
+            Logger._logger = logger
 
-            Logger._logger_initialized = True  # Mark as initialized
-
-        return logger
+        return Logger._logger
 
     @staticmethod
     def separator(text, level="INFO"):
         """
         Log a message with a separator line.
-        :param emoji: Emoji to prefix the log message
         :param text: Log message
         :param level: Log level (default is "INFO")
         """
         separator = "=" * 40
-        logger.log(level, f"{text}")
-        print(separator)
+        logger.log(level, f"{text}\n{separator}")
 
 
 # Example Usage
 if __name__ == "__main__":
     log = Logger.get_logger()
-    # log.info("This is a standard log message.")
-
-# Logging emoji guide
-# Emoji	Description
-# 🟢	Connected
-# ⛔	   Disconnected
-# ⚠️    Error
-# 🚫    Closed positions
-# 🔃    Updated positions
-# 🔺    Buy
-# 🔻    Sell
-# 📈    Report
+    log.debug("Debug message (file only)")
+    log.info("Info message")
+    log.warning("Warning message")
+    log.error("Error message")
+    log.critical("Critical message")
+    log.separator("Section Break")

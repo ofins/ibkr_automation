@@ -188,12 +188,11 @@ class ReversalAlgo:
                 return
 
             prev, last = df.iloc[-2], df.iloc[-1]
-            logger.info(f"{contract.symbol}")
 
             reversal_up = (
                 last["rsi"] > 30 and prev["rsi"] < 30 and last["breakout_lower_vwap"]
             )
-            reversal_up = True
+            # reversal_up = True
             reversal_down = (
                 last["rsi"] < 70 and prev["rsi"] > 70 and last["breakout_upper_vwap"]
             )
@@ -261,7 +260,7 @@ class ReversalAlgo:
                 ]
 
                 await asyncio.gather(*tasks)
-                logger.info("=============================")
+                logger.info(f"Monitored:{self.config.CONTRACTS}")
                 self.ib.sleep(self.config.CHECK_INTERVAL_SECONDS)
 
         except KeyboardInterrupt:
