@@ -29,7 +29,8 @@ class Config:
     HISTORICAL_DURATION: str = "2 D"
     BAR_SIZE: str = "3 mins"
     CHECK_INTERVAL_SECONDS: int = 180
-    CONTRACTS = ["AAPL", "META", "AMD", "MU", "JPM", "TSLA", "SPY"]
+    # CONTRACTS = ["AAPL", "META", "AMD", "MU", "JPM", "TSLA", "SPY"]
+    CONTRACTS = ["TSLA"]
 
 
 class HistoricalDataFetcher:
@@ -69,9 +70,11 @@ class HistoricalDataFetcher:
         """Add technical indicators to the dataframe"""
 
         open_price = df.iloc[0]["open"]
+        today_date = df["time"].iloc[-1].normalize()
+        df_today = df[df["time"].dt.normalize() == today_date]
 
-        df["high_of_day"] = Indicators.high_of_day(df)
-        df["low_of_day"] = Indicators.low_of_day(df)
+        df["high_of_day"] = Indicators.high_of_day(df_today)
+        df["low_of_day"] = Indicators.low_of_day(df_today)
         df["vwap"] = Indicators.vwap(df)
         df["std_dev"] = Indicators.std_dev(df)
         df["vwap_upper"] = Indicators.vwap_upper(df, df["std_dev"])
@@ -88,26 +91,28 @@ class HistoricalDataFetcher:
             df, open_price, "up" if df["close"].iloc[-1] > open_price else "down"
         )
 
+        columns_to_display = [
+            "time",
+            "close",
+            "high_of_day",
+            "low_of_day",
+            "vwap",
+            "vwap_upper",
+            "vwap_lower",
+            "rsi",
+        ]
+
+        logger.info(
+            "\n"
+            + tabulate(
+                df[columns_to_display],
+                headers="keys",
+                tablefmt="fancy_grid",
+                showindex=False,
+            )
+        )
+
         return df
-
-    # columns_to_display = [
-    #     "time",
-    #     "close",
-    #     "vwap",
-    #     "vwap_upper",
-    #     "vwap_lower",
-    #     "rsi",
-    # ]
-
-    # logger.info(
-    #     "\n"
-    #     + tabulate(
-    #         df[columns_to_display],
-    #         headers="keys",
-    #         tablefmt="fancy_grid",
-    #         showindex=False,
-    #     )
-    # )
 
 
 class PriceLevelCalculator:
@@ -162,11 +167,13 @@ class AlertManager:
             f"📈 Symbol: {contract.symbol}\n"
             f"📅 Time: {latest['time']}\n"
             f"💰 Price: ${latest['close']:.2f}\n"
+            f"📈 High of Day: ${latest['high_of_day']:.2f}\n"
+            f"📉 Low of Day: ${latest['low_of_day']:.2f}\n"
             f"📊 RSI: {latest['rsi']:.2f}\n"
             f"🔵 VWAP: {latest['vwap']:.2f}\n"
             f"🔺 Upper VWAP: {latest['vwap_upper']:.2f}\n"
             f"🔻 Lower VWAP: {latest['vwap_lower']:.2f}\n\n"
-            f"{'🔼 Upward Reversal!\n' if reversal_up else '🔽 Downward Reversal!'}"
+            f"{'🔼 Upward Reversal!\n' if reversal_up else '🔽 Downward Reversal!\n'}"
             f"⚖️ Risk Reward Ratio: {risk_reward:.2f}"
         )
 
@@ -240,14 +247,8 @@ class ReversalAlgo:
         """Main algo execution loop"""
         try:
             self.is_running = True
-            timezone = ZoneInfo("America/New_York")
 
             while self.is_running:
-                # Close all pos and orders after designated time
-                # if datetime.now(timezone).time() > get_exit_time():
-                #     await close_all_positions(self.ib)
-                #     raise KeyboardInterrupt
-
                 # Do not check alerts for active position stocks
                 active_symbols = {
                     pos.contract.symbol.upper() for pos in self.ib.positions()
@@ -273,11 +274,14 @@ class ReversalAlgo:
 
 async def main():
     """Application entry point"""
-    ib = IB()
-    await connect_ib(ib)
+    try:
+        ib = IB()
+        await connect_ib(ib)
 
-    algo = ReversalAlgo(ib)
-    await algo.run()
+        algo = ReversalAlgo(ib)
+        await algo.run()
+    finally:
+        ib.disconnect()
 
 
 # Testing

@@ -2,8 +2,10 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, time
+from functools import reduce
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 from ib_insync import IB
 
 from my_module.close_all_positions import close_all_positions
@@ -17,10 +19,11 @@ logger = Logger.get_logger()
 class Config:
     EXIT_TIME = "15:45:00"
     MAX_POSITION_SIZE = 50
-    MAX_OPEN_POSITIONS = 5
-    MAX_TRADES_PER_DAY = 10
-    MAX_DAILY_DRAWDOWN = 200
+    MAX_OPEN_POSITIONS = 7
+    MAX_TRADES_PER_DAY = 20
+    MAX_DAILY_DRAWDOWN = -200
     TIMEZONE = ZoneInfo("America/New_York")
+    TURN_OFF_TIMER = False
 
 
 class Timer:
@@ -35,6 +38,8 @@ class Timer:
     async def check_exit_time(ib):
         exit_time = Timer.get_exit_time()
         logger.info(f"Current time: {datetime.now(Config.TIMEZONE).time()}")
+        if Config.TURN_OFF_TIMER:
+            return
         if datetime.now(Config.TIMEZONE).time() > exit_time:
             logger.info(f"Timer reached: {Config.EXIT_TIME} . Closing all positions...")
             await close_all_positions(ib)
@@ -48,12 +53,20 @@ class Account:
     @staticmethod
     async def check_daily_pnl(ib):
         account_summary = await ib.accountSummaryAsync()
-        # return daily_pnl
+        df = pd.DataFrame(account_summary)
+        realized_pnl = df[df.tag == "RealizedPnL"].iloc[0].value
+        logger.info(f"Realized PnL: {realized_pnl} | {Config.MAX_DAILY_DRAWDOWN}")
+        if float(realized_pnl) < Config.MAX_DAILY_DRAWDOWN:
+            logger.info(f"Daily drawdown exceeded: {realized_pnl}. Closing trades.")
+            await close_all_positions(ib)
 
     # Monitor open positions
     @staticmethod
     async def check_open_positions(ib):
         positions = ib.positions()
+        logger.info(
+            f"Total open positions: {len(positions)} | {Config.MAX_OPEN_POSITIONS}"
+        )
         if len(positions) > Config.MAX_OPEN_POSITIONS:
             logger.info(f"Max positions exceeded: {len(positions)}. Closing trades.")
             await close_all_positions(ib)
@@ -62,7 +75,8 @@ class Account:
     @staticmethod
     async def check_position_sizes(ib):
         positions = ib.positions()
-        logger.info(f"Total positions: {len(positions)}")
+        total_size = reduce(lambda a, b: a + b, [p.position for p in positions], 0)
+        logger.info(f"Total position size: {total_size}")
         for pos in positions:
             if pos.position > Config.MAX_POSITION_SIZE:
                 logger.info(
@@ -74,7 +88,7 @@ class Account:
     @staticmethod
     async def check_daily_trades(ib):
         trades = ib.trades()
-        logger.info(f"Total trades today: {len(trades)}")
+        logger.info(f"Total trades today: {len(trades)} | {Config.MAX_TRADES_PER_DAY}")
         if len(trades) > Config.MAX_TRADES_PER_DAY:
             logger.info(f"Max trades exceeded: {len(trades)}. Closing trades.")
             await close_all_positions(ib)
@@ -94,7 +108,7 @@ class Guardian:
         while True:
             try:
                 tasks = [
-                    # Timer.check_exit_time(self.ib),
+                    Timer.check_exit_time(self.ib),
                     Account.check_daily_pnl(self.ib),
                     Account.check_open_positions(self.ib),
                     Account.check_position_sizes(self.ib),
@@ -102,15 +116,15 @@ class Guardian:
                 ]
 
                 await asyncio.gather(*tasks)
-
+                print("=" * 40)
                 # Wait before next check
-                await asyncio.sleep(5)
+                await asyncio.sleep(30)
             except KeyboardInterrupt:
                 logger.info("Keyboard Interrupt.")
                 break
             except Exception as e:
                 logger.error(f"Error in Guardian monitoring: {str(e)}")
-                await asyncio.sleep(5)  # Continue monitoring even after error
+                await asyncio.sleep(30)  # Continue monitoring even after error
 
 
 if __name__ == "__main__":
