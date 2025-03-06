@@ -18,6 +18,7 @@ from my_module.plot import generate_html
 from my_module.timer import close_trades_timer, timer
 from my_module.util import get_exit_time
 from my_module.utils.arg_parser import args
+from scanner import Scanner
 
 nest_asyncio.apply()
 
@@ -27,6 +28,7 @@ logger = Logger.get_logger()
 class MenuOption(Enum):
     CLOSE_TRADES = auto()  # Close all traders / orders at a specific time
     FETCH_TRADES = auto()  # Generate trade report
+    SCANNER = auto()  # Run scanner
     SCALE_IN_ALGO = auto()  # place orders / monitor stop
     REVERSAL_ALGO = auto()  # detect trend reversal
     EXIT = auto()
@@ -48,9 +50,10 @@ class TradingApp:
     MENU_CHOICES = {
         "1": MenuChoice(MenuOption.CLOSE_TRADES, "Run close trades timer"),
         "2": MenuChoice(MenuOption.FETCH_TRADES, "Generate trade report"),
-        "3": MenuChoice(MenuOption.SCALE_IN_ALGO, "Run Scale-in algo"),
-        "4": MenuChoice(MenuOption.REVERSAL_ALGO, "Run Reversal algo"),
-        "5": MenuChoice(MenuOption.EXIT, "Exit"),
+        "3": MenuChoice(MenuOption.SCANNER, "Run scanner"),
+        "4": MenuChoice(MenuOption.SCALE_IN_ALGO, "Run Scale-in algo"),
+        "5": MenuChoice(MenuOption.REVERSAL_ALGO, "Run Reversal algo"),
+        "6": MenuChoice(MenuOption.EXIT, "Exit"),
     }
 
     def __init__(self):
@@ -108,10 +111,19 @@ class TradingApp:
         except Exception as e:
             logger.error(f"Error in running reversal algo: {str(e)}")
 
+    async def run_scanner(self) -> None:
+        try:
+            scanner = Scanner()
+            data = await scanner.get_top_gainers(self.ib)
+            logger.info(data)
+        except Exception as e:
+            logger.error(f"Error in running scanner: {str(e)}")
+
     async def handle_menu_choice(self, choice: MenuOption) -> bool:
         handlers: Dict[MenuOption, Callable[[], Coroutine[Any, Any, Any] | bool]] = {
             MenuOption.CLOSE_TRADES: self.close_trades,
             MenuOption.FETCH_TRADES: self.fetch_trades,
+            MenuOption.SCANNER: self.run_scanner,
             MenuOption.SCALE_IN_ALGO: self.run_scale_in_algo,
             MenuOption.REVERSAL_ALGO: self.run_reversal_algo,
             MenuOption.EXIT: lambda: False,
